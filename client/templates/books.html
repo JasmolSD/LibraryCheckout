@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Add Book{% endblock %}
+{% block title %}Books{% endblock %}
 
 {% block content %}
-<div x-data="addBookApp()" x-init="init()" class="max-w-lg mx-auto">
+<div x-data="addBookApp()" x-init="init()" class="max-w-2xl mx-auto space-y-6">
 
+    <!-- ══ Add new book ══════════════════════════════════════════ -->
     <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-6">
 
         <!-- Header -->
@@ -153,13 +154,131 @@
     </div>
 
     <!-- Add another prompt (shown after success) -->
-    <div x-show="successMsg" x-transition class="mt-4 text-center">
+    <div x-show="successMsg" x-transition class="text-center">
         <button @click="reset()"
                 class="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
             + Add another item
         </button>
     </div>
 
+    <!-- ══ Manage existing book ══════════════════════════════════ -->
+    <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-6">
+
+        <div class="flex items-center gap-3 mb-5">
+            <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
+                <svg class="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+                </svg>
+            </div>
+            <div>
+                <h2 class="font-bold text-lg text-slate-900">Manage Existing Book</h2>
+                <p class="text-sm text-slate-400">Look up by barcode to return, archive, or reactivate.</p>
+            </div>
+        </div>
+
+        <!-- Lookup -->
+        <div class="flex gap-2 mb-4">
+            <input x-model="manage.barcode"
+                   @keydown.enter="lookupBook()"
+                   type="text"
+                   inputmode="numeric"
+                   placeholder="Scan or enter barcode"
+                   class="flex-1 border border-slate-300 rounded-lg px-3 py-2.5 font-mono text-sm
+                          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+            <button @click="lookupBook()"
+                    :disabled="manage.loading"
+                    class="bg-slate-700 text-white px-5 rounded-lg hover:bg-slate-800 font-medium text-sm
+                           transition-colors flex items-center gap-2 disabled:opacity-50">
+                <span x-show="manage.loading" class="spinner"></span>
+                <span>Look Up</span>
+            </button>
+        </div>
+
+        <!-- Error -->
+        <div x-show="manage.error"
+             x-transition
+             class="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-700"
+             x-text="manage.error">
+        </div>
+
+        <!-- Success -->
+        <div x-show="manage.success"
+             x-transition
+             class="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-700"
+             x-text="manage.success">
+        </div>
+
+        <!-- Book detail card -->
+        <template x-if="manage.book">
+            <div class="border border-slate-200 rounded-xl p-4">
+
+                <!-- Book info -->
+                <div class="flex items-start justify-between gap-4 mb-4">
+                    <div>
+                        <h3 class="font-semibold text-slate-900"
+                            x-text="manage.book.title || '(untitled)'"></h3>
+                        <p class="text-xs text-slate-500 font-mono mt-0.5"
+                           x-text="manage.book.barcode"></p>
+                        <p x-show="manage.book.author"
+                           class="text-sm text-slate-500 mt-1"
+                           x-text="manage.book.author"></p>
+                    </div>
+                    <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
+                        <span class="px-2 py-0.5 rounded-full text-xs font-medium"
+                              :class="manage.book.is_active
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-slate-200 text-slate-500'"
+                              x-text="manage.book.is_active ? 'Active' : 'Archived'"></span>
+                        <span x-show="manage.book.checked_out"
+                              class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                            Checked out
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Checked out info -->
+                <div x-show="manage.book.checked_out"
+                     class="bg-amber-50 border border-amber-100 rounded-lg p-3 mb-4 text-sm">
+                    <p class="text-amber-800">
+                        Checked out to <strong x-text="manage.book.checked_out_to"></strong>
+                        <span class="text-xs font-mono text-amber-600 ml-1"
+                              x-text="manage.book.checked_out_card"></span>
+                    </p>
+                    <p class="text-amber-600 text-xs mt-1"
+                       x-text="manage.book.due_date ? 'Due: ' + manage.book.due_date.slice(0, 10) : ''"></p>
+                </div>
+
+                <!-- Action buttons -->
+                <div class="flex flex-wrap gap-2">
+                    <!-- Return -->
+                    <button x-show="manage.book.checked_out"
+                            @click="manageAction('return')"
+                            :disabled="manage.acting"
+                            class="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium
+                                   hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                        Return Item
+                    </button>
+                    <!-- Archive -->
+                    <button x-show="manage.book.is_active && !manage.book.checked_out"
+                            @click="manageAction('archive')"
+                            :disabled="manage.acting"
+                            class="px-4 py-2 rounded-lg bg-rose-600 text-white text-sm font-medium
+                                   hover:bg-rose-700 disabled:opacity-50 transition-colors">
+                        Archive
+                    </button>
+                    <!-- Reactivate -->
+                    <button x-show="!manage.book.is_active"
+                            @click="manageAction('reactivate')"
+                            :disabled="manage.acting"
+                            class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium
+                                   hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+                        Reactivate
+                    </button>
+                </div>
+            </div>
+        </template>
+    </div>
 </div>
 {% endblock %}
 
@@ -167,6 +286,7 @@
 <script>
 function addBookApp() {
     return {
+        // ── Add book state ─────────────────────────────────────
         form: {
             barcode:  '',
             title:    '',
@@ -180,9 +300,21 @@ function addBookApp() {
         successMsg:   '',
         lastLookedUp: '',   // ISBN already fetched — skip duplicate lookups
 
+        // ── Manage book state ──────────────────────────────────
+        manage: {
+            barcode: '',
+            book:    null,
+            loading: false,
+            acting:  false,
+            error:   '',
+            success: '',
+        },
+
         init() {
             this.$nextTick(() => document.getElementById('isbn')?.focus());
         },
+
+        // ── Add book methods ───────────────────────────────────
 
         async onIsbnChange() {
             const isbn = this.form.barcode.trim();
@@ -252,6 +384,73 @@ function addBookApp() {
             this.lookupStatus = '';
             this.lastLookedUp = '';
             this.$nextTick(() => document.getElementById('isbn')?.focus());
+        },
+
+        // ── Manage book methods ────────────────────────────────
+
+        async lookupBook() {
+            const bc = this.manage.barcode.trim();
+            if (!bc) return;
+            this.manage.loading = true;
+            this.manage.error   = '';
+            this.manage.success = '';
+            this.manage.book    = null;
+            try {
+                const r = await fetch(`/api/books/${encodeURIComponent(bc)}`);
+                const data = await r.json();
+                if (!r.ok) {
+                    this.manage.error = data.error || 'Book not found';
+                    return;
+                }
+                this.manage.book = data;
+            } catch (e) {
+                this.manage.error = e.message;
+            } finally {
+                this.manage.loading = false;
+            }
+        },
+
+        async manageAction(action) {
+            const bc = this.manage.book?.barcode;
+            if (!bc) return;
+            this.manage.acting  = true;
+            this.manage.error   = '';
+            this.manage.success = '';
+
+            let url, label;
+            if (action === 'return') {
+                url   = '/api/checkouts/return';
+                label = 'Returned';
+            } else if (action === 'archive') {
+                url   = `/api/books/${encodeURIComponent(bc)}/archive`;
+                label = 'Archived';
+            } else {
+                url   = `/api/books/${encodeURIComponent(bc)}/reactivate`;
+                label = 'Reactivated';
+            }
+
+            try {
+                const opts = {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                };
+                if (action === 'return') {
+                    opts.body = JSON.stringify({ barcode: bc });
+                }
+                const r = await fetch(url, opts);
+                const data = await r.json();
+                if (!r.ok) {
+                    this.manage.error = data.error || 'Action failed';
+                    return;
+                }
+                this.manage.success = `${label}: ${bc}`;
+                // Refresh book details
+                await this.lookupBook();
+            } catch (e) {
+                this.manage.error = e.message;
+            } finally {
+                this.manage.acting = false;
+            }
         },
     };
 }

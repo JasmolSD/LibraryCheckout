@@ -81,6 +81,20 @@ def lookup_isbn():
     )
 
 
+@bp.get("/<barcode>")
+def get_book(barcode):
+    """Look up a book by barcode and return its details including loan status.
+
+    Returns:
+        200 with book details JSON on success.
+        400 ``{"error": "..."}`` if the barcode is invalid or unknown.
+    """
+    try:
+        return jsonify(checkout_service.book_details(barcode))
+    except ValidationError as e:
+        return jsonify({"error": str(e)}), 400
+
+
 @bp.post("/")
 def add_book():
     """Add a new item to the library catalog.
@@ -105,5 +119,38 @@ def add_book():
             category=data.get("category", "book"),
         )
         return jsonify(book.to_dict()), 201
+    except ValidationError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@bp.post("/<barcode>/archive")
+def archive_book(barcode):
+    """Archive a book from the catalog (soft-delete).
+
+    The book must not be currently checked out. Sets it to inactive
+    and logs an ``archive_book`` transaction.
+
+    Returns:
+        200 with book JSON on success.
+        400 ``{"error": "..."}`` if the book is checked out or already archived.
+    """
+    try:
+        book = checkout_service.archive_book(barcode)
+        return jsonify(book.to_dict())
+    except ValidationError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@bp.post("/<barcode>/reactivate")
+def reactivate_book(barcode):
+    """Reactivate a previously archived book.
+
+    Returns:
+        200 with book JSON on success.
+        400 ``{"error": "..."}`` if the book is already active.
+    """
+    try:
+        book = checkout_service.reactivate_book(barcode)
+        return jsonify(book.to_dict())
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400

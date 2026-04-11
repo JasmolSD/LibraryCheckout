@@ -136,6 +136,33 @@ function historyApp() {
             this.load();
         },
 
+        // ── Return items ──────────────────────────────────────────
+
+        /**
+         * Return a single item from the active-items list.
+         * Calls the return API and reloads the patron data.
+         *
+         * @param {string} barcode - The barcode of the item to return.
+         * @returns {Promise<void>}
+         */
+        async returnItem(barcode) {
+            try {
+                const r = await fetch('/api/checkouts/return', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ barcode }),
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    this.errMsg = data.error || 'Return failed';
+                    return;
+                }
+                await this.load();
+            } catch (e) {
+                this.errMsg = e.message;
+            }
+        },
+
         // ── Filtering ─────────────────────────────────────────────
 
         /**

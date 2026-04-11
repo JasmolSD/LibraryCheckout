@@ -21,6 +21,7 @@ def test_create_patron(client):
     data = r.get_json()
     assert data["name"] == "DOE, JANE"
     assert data["card_masked"] == "**7890"
+    assert data["is_active"] is True
 
 
 def test_create_patron_invalid_card(client):
@@ -154,3 +155,81 @@ def test_full_checkout_flow_via_api(client, patron):
 
     summary = client.get("/api/patrons/1234567890").get_json()
     assert summary["currently_out"] == 0
+
+
+def test_checkout_response_is_loan_shape(client, patron):
+    """Checkout response returns a Loan dict, not the old Checkout shape."""
+    r = client.post(
+        "/api/checkouts/",
+        json={"card_number": "1234567890", "barcode": "5555555555"},
+    )
+    assert r.status_code == 201
+    data = r.get_json()
+    # Loan fields present
+    assert "loan_days" in data
+    assert "checked_out_at" in data
+    assert "due_date" in data
+    assert "is_active" in data
+    assert "is_late" in data
+    assert "barcode" in data
+    # Old Checkout-only field absent
+    assert "action" not in data
+
+
+def test_return_response_is_loan_shape(client, patron):
+    """Return response returns the updated Loan dict."""
+    client.post(
+        "/api/checkouts/",
+        json={"card_number": "1234567890", "barcode": "5555555555"},
+    )
+    r = client.post("/api/checkouts/return", json={"barcode": "5555555555"})
+    assert r.status_code == 200
+    data = r.get_json()
+    assert data["returned_at"] is not None
+    assert data["is_active"] is False
+    assert "action" not in data
+
+
+def test_patron_summary_history_has_action_field(client, patron):
+    """History entries come from Transaction, which includes the action field."""
+    client.post(
+        "/api/checkouts/",
+        json={"card_number": "1234567890", "barcode": "5555555555"},
+    )
+    summary = client.get("/api/patrons/1234567890").get_json()
+    assert len(summary["history"]) >= 1
+    assert summary["history"][0]["action"] == "checkout"
+
+
+def test_manual_return_from_patron_active_items(client, patron):
+    """Simulate manual return: look up patron, see active items, return one."""
+    # Checkout two items
+    client.post(
+        "/api/checkouts/",
+        json={"card_number": "1234567890", "barcode": "5555555555"},
+    )
+    client.post(
+        "/api/checkouts/",
+        json={"card_number": "1234567890", "barcode": "6666666666"},
+    )
+
+    # Look up patron — should show 2 active items
+    summary = client.get("/api/patrons/1234567890").get_json()
+    assert summary["currently_out"] == 2
+
+    # Return one item by barcode (as a librarian would from the UI)
+    r = client.post("/api/checkouts/return", json={"barcode": "5555555555"})
+    assert r.status_code == 200
+
+    # Verify only 1 remains
+    summary = client.get("/api/patrons/1234567890").get_json()
+    assert summary["currently_out"] == 1
+    barcodes = [item["barcode"] for item in summary["active_items"]]
+    assert "5555555555" not in barcodes
+    assert "6666666666" in barcodes
+
+
+def test_books_page_returns_200(client):
+    """The /books page route responds successfully."""
+    r = client.get("/books")
+    assert r.status_code == 200

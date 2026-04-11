@@ -199,6 +199,32 @@ function checkoutApp() {
             window.open(`/api/receipts/${this.patron.patron.card_number}`, '_blank');
         },
 
+        /**
+         * Return a single item directly from the active-items table.
+         * Calls the return API and refreshes the patron summary.
+         *
+         * @param {string} barcode - The barcode of the item to return.
+         * @returns {Promise<void>}
+         */
+        async returnSingleItem(barcode) {
+            try {
+                const r = await fetch('/api/checkouts/return', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ barcode }),
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    this.toast(data.error || 'Return failed', 'error');
+                    return;
+                }
+                this.toast(`Returned: ${barcode}`, 'success');
+                await this.refreshPatron();
+            } catch (e) {
+                this.toast(e.message, 'error');
+            }
+        },
+
         // ── Helpers ───────────────────────────────────────────────
 
         /**

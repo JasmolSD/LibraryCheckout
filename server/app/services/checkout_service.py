@@ -129,6 +129,23 @@ def overdue_items() -> list[dict]:
     return result
 
 
+def book_details(barcode: str) -> dict:
+    """Return details about a book including its current loan status."""
+    barcode = validate_barcode(barcode)
+    book = Book.query.filter_by(barcode=barcode).first()
+    if not book:
+        raise ValidationError(f"Unknown item {barcode}")
+
+    active_loan = Loan.query.filter_by(book_id=book.id, returned_at=None).first()
+    result = book.to_dict()
+    result["checked_out"] = active_loan is not None
+    if active_loan:
+        result["checked_out_to"] = active_loan.patron.name
+        result["checked_out_card"] = active_loan.patron.card_number
+        result["due_date"] = active_loan.due_date.isoformat() if active_loan.due_date else None
+    return result
+
+
 def get_or_create_book(barcode: str, title: str | None = None, category: str = "book") -> Book:
     """Look up an item by barcode, creating a new record if not found."""
     book = Book.query.filter_by(barcode=barcode).first()
@@ -156,10 +173,14 @@ def checkout_item(
     patron = Patron.query.filter_by(card_number=validate_card(card)).first()
     if not patron:
         raise ValidationError("Patron not found — register first")
+    if not patron.is_active:
+        raise ValidationError("Patron account is archived — reactivate before checking out")
 
     barcode = validate_barcode(barcode)
 
     book = get_or_create_book(barcode, title=title, category=category)
+    if not book.is_active:
+        raise ValidationError(f"Item {barcode} is archived — reactivate before checking out")
     existing = Loan.query.filter_by(book_id=book.id, returned_at=None).first()
     if existing:
         raise ValidationError(f"Item {barcode} is already checked out")
@@ -327,10 +348,16 @@ def patron_summary(card: str) -> dict:
     active = [ln for ln in all_loans if ln.is_active]
     late = [ln for ln in active if ln.is_late]
 
-    # Build history from transactions, ordered newest first
+    # Build history from transactions, ordered newest first.
+    # Includes loan-level events (via loan FK) and patron-level events (via patron FK).
     history = (
-        Transaction.query.join(Loan, Transaction.loan_id == Loan.id)
-        .filter(Loan.patron_id == patron.id)
+        Transaction.query.outerjoin(Loan, Transaction.loan_id == Loan.id)
+        .filter(
+            db.or_(
+                Loan.patron_id == patron.id,
+                Transaction.patron_id == patron.id,
+            )
+        )
         .order_by(Transaction.created_at.desc())
         .all()
     )
@@ -344,3 +371,94 @@ def patron_summary(card: str) -> dict:
         "active_items": [ln.to_dict() for ln in active],
         "history": [txn.to_dict() for txn in history],
     }
+
+
+# ── Archive / Reactivate ────────────────────────────────────────────────────
+
+
+def archive_patron(card: str) -> Patron:
+    """Archive a patron account (soft-delete).
+
+    All active loans must be returned first. Sets ``is_active = False``
+    and logs an ``archive_patron`` transaction.
+    """
+    card = validate_card(card)
+    patron = Patron.query.filter_by(card_number=card).first()
+    if not patron:
+        raise ValidationError("Patron not found")
+    if not patron.is_active:
+        raise ValidationError("Patron is already archived")
+
+    active_loans = Loan.query.filter_by(patron_id=patron.id, returned_at=None).count()
+    if active_loans:
+        raise ValidationError(
+            f"Cannot archive — patron has {active_loans} active loan(s). Return all items first."
+        )
+
+    patron.is_active = False
+    txn = Transaction(patron_id=patron.id, action="archive_patron", created_at=_utcnow())
+    db.session.add(txn)
+    db.session.commit()
+    current_app.logger.info("Archived patron %s", patron.masked_card)
+    return patron
+
+
+def reactivate_patron(card: str) -> Patron:
+    """Reactivate a previously archived patron account."""
+    card = validate_card(card)
+    patron = Patron.query.filter_by(card_number=card).first()
+    if not patron:
+        raise ValidationError("Patron not found")
+    if patron.is_active:
+        raise ValidationError("Patron is already active")
+
+    patron.is_active = True
+    txn = Transaction(patron_id=patron.id, action="reactivate_patron", created_at=_utcnow())
+    db.session.add(txn)
+    db.session.commit()
+    current_app.logger.info("Reactivated patron %s", patron.masked_card)
+    return patron
+
+
+def archive_book(barcode: str) -> Book:
+    """Archive a book from the catalog (soft-delete).
+
+    The book must not be currently checked out. Sets ``is_active = False``
+    and logs an ``archive_book`` transaction.
+    """
+    barcode = validate_barcode(barcode)
+    book = Book.query.filter_by(barcode=barcode).first()
+    if not book:
+        raise ValidationError(f"Unknown item {barcode}")
+    if not book.is_active:
+        raise ValidationError(f"Item {barcode} is already archived")
+
+    active_loan = Loan.query.filter_by(book_id=book.id, returned_at=None).first()
+    if active_loan:
+        raise ValidationError(
+            f"Cannot archive — item {barcode} is currently checked out. Return it first."
+        )
+
+    book.is_active = False
+    txn = Transaction(book_id=book.id, action="archive_book", created_at=_utcnow())
+    db.session.add(txn)
+    db.session.commit()
+    current_app.logger.info("Archived book %s", barcode)
+    return book
+
+
+def reactivate_book(barcode: str) -> Book:
+    """Reactivate a previously archived book."""
+    barcode = validate_barcode(barcode)
+    book = Book.query.filter_by(barcode=barcode).first()
+    if not book:
+        raise ValidationError(f"Unknown item {barcode}")
+    if book.is_active:
+        raise ValidationError(f"Item {barcode} is already active")
+
+    book.is_active = True
+    txn = Transaction(book_id=book.id, action="reactivate_book", created_at=_utcnow())
+    db.session.add(txn)
+    db.session.commit()
+    current_app.logger.info("Reactivated book %s", barcode)
+    return book

@@ -7,14 +7,15 @@ Ported from a legacy Excel/VBA workflow to a modern Flask + pywebview stack.
 
 - **Library card scanning** — look up patrons instantly; new-patron registration via inline modal (no `prompt()`)
 - **Auto-generated card numbers** — registration page assigns the next sequential 14-digit library card automatically; no manual entry required
-- **Catalog management** — dedicated Add Book page: scan an ISBN to auto-fill title, author, and category via Google Books; supports ISBN-10, ISBN-13, and 14-digit library barcodes
+- **Catalog management** — Books page with ISBN auto-fill via Google Books; Manage Existing Book panel for looking up items by barcode to return, archive, or reactivate them
 - **Statistics dashboard** — at-a-glance counts (patrons, catalog size, active checkouts, overdue items); click the overdue tile to expand a full list showing patron name, card number, book, barcode, and days overdue
 - **Loan period selector** — choose 1, 2, or 3 weeks per checkout or renewal; defaults to 2 weeks
-- **Checkout / Return / Renew** — colour-coded action tabs with loading states and toast notifications
+- **Checkout / Return / Renew** — colour-coded action tabs with loading states and toast notifications; per-item Return buttons on the checkout screen and history page for manual override returns
 - **PDF receipt generation** — ReportLab-based receipt printed directly from the browser
 - **Patron history viewer** — full transaction log with filter tabs (All / Checkouts / Returns / Renewals)
 - **Help & User Guide** — built-in `/help` page with step-by-step instructions and FAQ
 - **Customisable UI** — drop `background.*` or `icon.*` into `client/static/images/` to brand the app without code changes
+- **Archive / Reactivate** — soft-delete patrons and books (preserves all history); reactivate at any time; archived items cannot be checked out
 - **Late item flagging** — overdue items highlighted in red on the checkout screen and history page
 - **Category support** — book, DVD, audiobook, magazine, eBook, other
 
@@ -79,7 +80,7 @@ docker run -p 5000:5000 library-checkout
 | `/` | Main checkout screen |
 | `/history` | Patron transaction history |
 | `/register` | New patron registration (card number auto-generated) |
-| `/add-book` | Add items to the catalog with ISBN auto-fill |
+| `/books` | Add items to catalog + manage existing books (return, archive, reactivate) |
 | `/stats` | Library statistics dashboard with overdue detail |
 | `/help` | User guide & FAQ |
 | `/api/health` | Health-check JSON |
@@ -94,13 +95,18 @@ docker run -p 5000:5000 library-checkout
 | `GET` | `/api/patrons/search?q=` | Search patrons by name |
 | `GET` | `/api/patrons/<card>` | Patron summary + active items + history |
 | `POST` | `/api/patrons/` | Register a new patron |
+| `POST` | `/api/patrons/<card>/archive` | Archive (soft-delete) a patron |
+| `POST` | `/api/patrons/<card>/reactivate` | Reactivate an archived patron |
 
 ### Books
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/books/lookup?isbn=` | Fetch title/author/category from Google Books |
+| `GET` | `/api/books/<barcode>` | Book details including loan status |
 | `POST` | `/api/books/` | Add an item to the catalog |
+| `POST` | `/api/books/<barcode>/archive` | Archive (soft-delete) a book |
+| `POST` | `/api/books/<barcode>/reactivate` | Reactivate an archived book |
 
 ### Checkouts
 
@@ -191,11 +197,11 @@ library-checkout/
 │   │   ├── __init__.py         # app factory + context processor
 │   │   ├── config.py           # Dev / Prod / Test config classes
 │   │   ├── database.py         # SQLAlchemy instance
-│   │   ├── models.py           # Patron, Book, Checkout ORM models
+│   │   ├── models.py           # Patron, Book, Loan, Transaction ORM models
 │   │   ├── routes/
 │   │   │   ├── patrons.py      # GET /api/patrons, POST /api/patrons/, GET /api/patrons/next-card
 │   │   │   ├── checkouts.py    # POST /api/checkouts/{,return,renew}, GET /api/checkouts/overdue
-│   │   │   ├── books.py        # GET /api/books/lookup, POST /api/books/
+│   │   │   ├── books.py        # GET /api/books/lookup, GET/POST /api/books/, archive, reactivate
 │   │   │   └── receipts.py     # GET /api/receipts/<card>
 │   │   ├── services/
 │   │   │   ├── checkout_service.py  # Core business logic
@@ -205,8 +211,12 @@ library-checkout/
 │   │       └── logger.py       # Rotating-file logger setup
 │   └── tests/
 │       ├── conftest.py
+│       ├── test_archive.py
+│       ├── test_books.py
 │       ├── test_checkout.py
 │       ├── test_patrons.py
+│       ├── test_receipts.py
+│       ├── test_stats.py
 │       └── test_validators.py
 ├── client/
 │   ├── templates/
@@ -214,7 +224,7 @@ library-checkout/
 │   │   ├── index.html          # Checkout screen
 │   │   ├── history.html        # Patron history viewer
 │   │   ├── register.html       # New-patron registration (auto-generated card)
-│   │   ├── add_book.html       # Add item to catalog with ISBN auto-fill
+│   │   ├── books.html          # Books catalog and management page
 │   │   ├── stats.html          # Library statistics dashboard
 │   │   └── help.html           # User guide & FAQ
 │   └── static/

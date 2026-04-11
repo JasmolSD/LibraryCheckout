@@ -137,6 +137,46 @@
                 </div>
             </div>
 
+            <!-- Active items with return buttons -->
+            <div x-show="data.active_items && data.active_items.length > 0"
+                 class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 mb-4">
+                <h3 class="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
+                    Currently Checked Out
+                    <span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-full font-bold"
+                          x-text="data.active_items.length"></span>
+                </h3>
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-xs text-slate-500 uppercase tracking-wider border-b border-slate-100">
+                            <th class="pb-2 text-left font-medium">Barcode</th>
+                            <th class="pb-2 text-left font-medium">Title</th>
+                            <th class="pb-2 text-left font-medium">Due</th>
+                            <th class="pb-2 text-right font-medium"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-50">
+                        <template x-for="item in data.active_items" :key="item.id">
+                            <tr>
+                                <td class="py-2.5 font-mono text-xs text-slate-600" x-text="item.barcode"></td>
+                                <td class="py-2.5 text-slate-700 max-w-[200px] truncate"
+                                    x-text="item.title || '—'"></td>
+                                <td class="py-2.5">
+                                    <span :class="item.is_late ? 'text-rose-600 font-semibold' : 'text-slate-700'"
+                                          x-text="item.due_date ? item.due_date.slice(0, 10) : '—'"></span>
+                                </td>
+                                <td class="py-2.5 text-right">
+                                    <button @click="returnItem(item.barcode)"
+                                            class="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-lg
+                                                   hover:bg-blue-200 font-medium transition-colors">
+                                        Return
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
             <!-- Filter tabs -->
             <div class="flex flex-wrap gap-1.5 mb-4">
                 <template x-for="f in ['all', 'checkout', 'return', 'renew']" :key="f">

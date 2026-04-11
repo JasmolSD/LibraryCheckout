@@ -257,6 +257,7 @@
                             <th class="pb-2 text-left font-medium">Title</th>
                             <th class="pb-2 text-left font-medium">Category</th>
                             <th class="pb-2 text-left font-medium">Due</th>
+                            <th class="pb-2 text-right font-medium"></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
@@ -289,6 +290,13 @@
                                         </template>
                                         <span x-text="item.due_date ? item.due_date.slice(0, 10) : '—'"></span>
                                     </span>
+                                </td>
+                                <td class="py-2.5 text-right">
+                                    <button @click="returnSingleItem(item.barcode)"
+                                            class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg
+                                                   hover:bg-blue-200 font-medium transition-colors">
+                                        Return
+                                    </button>
                                 </td>
                             </tr>
                         </template>

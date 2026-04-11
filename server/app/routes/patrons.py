@@ -102,3 +102,36 @@ def create_patron():
         return jsonify(patron.to_dict()), 201
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400
+
+
+@bp.post("/<card>/archive")
+def archive_patron(card):
+    """Archive a patron account (soft-delete).
+
+    The patron must have no active loans. Sets the account to inactive
+    and logs an ``archive_patron`` transaction.
+
+    Returns:
+        200 with patron JSON on success.
+        400 ``{"error": "..."}`` if the patron has active loans or is already archived.
+    """
+    try:
+        patron = checkout_service.archive_patron(card)
+        return jsonify(patron.to_dict())
+    except ValidationError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@bp.post("/<card>/reactivate")
+def reactivate_patron(card):
+    """Reactivate a previously archived patron account.
+
+    Returns:
+        200 with patron JSON on success.
+        400 ``{"error": "..."}`` if the patron is already active.
+    """
+    try:
+        patron = checkout_service.reactivate_patron(card)
+        return jsonify(patron.to_dict())
+    except ValidationError as e:
+        return jsonify({"error": str(e)}), 400
