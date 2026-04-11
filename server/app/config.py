@@ -1,9 +1,21 @@
-"""Configuration classes — dev / prod / test."""
+"""Configuration classes — dev / prod / test.
+
+Provides three concrete config classes (``DevConfig``, ``ProdConfig``,
+``TestConfig``) that inherit shared settings from ``BaseConfig``.
+Values can be overridden at runtime via environment variables or a ``.env``
+file (loaded automatically by python-dotenv).
+
+Usage::
+
+    from server.app.config import get_config
+    app.config.from_object(get_config("testing"))
+"""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -58,5 +70,15 @@ _CONFIGS = {
 
 
 def get_config(name: str | None = None) -> type[BaseConfig]:
+    """Return the config class for the given environment name.
+
+    Args:
+        name: ``"development"``, ``"production"``, or ``"testing"``.
+            Falls back to the ``FLASK_ENV`` environment variable, then
+            to ``"development"`` if neither is set.
+
+    Returns:
+        A :class:`BaseConfig` subclass (not an instance).
+    """
     name = name or os.getenv("FLASK_ENV", "development")
     return _CONFIGS.get(name, DevConfig)

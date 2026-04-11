@@ -1,6 +1,7 @@
 """Pytest fixtures — fresh in-memory DB per test."""
 
 import pytest
+
 from server.app import create_app
 from server.app.database import db
 

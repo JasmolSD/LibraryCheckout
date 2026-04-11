@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
+
 from .database import db
+
+
+def _utcnow() -> datetime:
+    """Return current UTC time as a naive datetime (SQLite-compatible)."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class Patron(db.Model):
@@ -13,7 +19,7 @@ class Patron(db.Model):
     card_number = db.Column(db.String(14), unique=True, nullable=False, index=True)
     name = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(120), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=_utcnow, nullable=False)
 
     checkouts = db.relationship(
         "Checkout", backref="patron", lazy="dynamic", cascade="all, delete-orphan"
@@ -43,7 +49,7 @@ class Book(db.Model):
     author = db.Column(db.String(120), nullable=True)
     category = db.Column(db.String(40), default="book", nullable=False)
     # categories: book, dvd, audiobook, magazine, ebook, other
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=_utcnow, nullable=False)
 
     checkouts = db.relationship("Checkout", backref="book", lazy="dynamic")
 
@@ -68,7 +74,7 @@ class Checkout(db.Model):
     action = db.Column(db.String(20), default="checkout", nullable=False)
     weeks = db.Column(db.Integer, default=3, nullable=False)
 
-    checked_out_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    checked_out_at = db.Column(db.DateTime, default=_utcnow, nullable=False)
     due_date = db.Column(db.DateTime, nullable=True)
     returned_at = db.Column(db.DateTime, nullable=True)
 
@@ -78,7 +84,7 @@ class Checkout(db.Model):
 
     @property
     def is_late(self) -> bool:
-        return self.is_active and self.due_date is not None and self.due_date < datetime.utcnow()
+        return self.is_active and self.due_date is not None and self.due_date < _utcnow()
 
     def to_dict(self) -> dict:
         return {

@@ -1,6 +1,7 @@
 """Tests for the VBA-ported validators."""
 
 import pytest
+
 from server.app.services.validators import (
     ValidationError,
     normalize_name,

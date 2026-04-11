@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/Users/jasdh/OneDrive/Documents/GitHub/book_checkout_receipt/server/tests/*.py)",
+      "Bash(uv run:*)",
+      "Read(//c/Users/jasdh/.claude/projects/c--Users-jasdh-OneDrive-Documents-GitHub-book-checkout-receipt/**)",
+      "Read(//c/Users/jasdh/.claude/projects/c--Users-jasdh-OneDrive-Documents-GitHub-book-checkout-receipt/memory/**)"
+    ]
+  }
+}

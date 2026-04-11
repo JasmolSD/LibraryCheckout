@@ -1,9 +1,11 @@
 """Desktop launcher: starts Flask in a background thread, opens a native window."""
 
+import sys
 import threading
 import time
-import sys
+
 import webview
+
 from server.app import create_app
 
 HOST = "127.0.0.1"

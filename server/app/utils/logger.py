@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+
 from flask import Flask
 
 _FORMAT = "[%(asctime)s] %(levelname)s in %(module)s: %(message)s"

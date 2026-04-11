@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import io
 from datetime import datetime
+
+from flask import current_app
 from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfgen import canvas
-from flask import current_app
 
-from ..models import Patron, Checkout
+from ..models import Checkout, Patron
 
 
 def build_receipt_pdf(patron: Patron, items: list[Checkout]) -> bytes:

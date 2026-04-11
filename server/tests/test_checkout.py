@@ -1,6 +1,7 @@
 """Tests for the checkout service business logic."""
 
 import pytest
+
 from server.app.services import checkout_service
 from server.app.services.validators import ValidationError
 

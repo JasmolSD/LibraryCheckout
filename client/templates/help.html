@@ -1,0 +1,417 @@
+{% extends "base.html" %}
+{% block title %}Help & Guide{% endblock %}
+
+{% block content %}
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<div class="bg-gradient-to-br from-indigo-700 to-indigo-900 rounded-2xl text-white p-8 mb-8 shadow-lg">
+    <div class="flex items-start gap-4">
+        <div class="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0
+                         3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0
+                         11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z"/>
+            </svg>
+        </div>
+        <div>
+            <h1 class="text-3xl font-bold tracking-tight mb-1">Help &amp; User Guide</h1>
+            <p class="text-indigo-200 text-lg">Step-by-step instructions for the Library Checkout System.</p>
+        </div>
+    </div>
+</div>
+
+<!-- ── Quick start ───────────────────────────────────────────── -->
+<section class="mb-8">
+    <h2 class="text-lg font-bold text-slate-900 mb-4">Quick Start — Check Out Items</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+        <div class="step-card bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5">
+            <div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 font-bold text-lg
+                        flex items-center justify-center mb-4">1</div>
+            <h3 class="font-semibold text-slate-800 mb-2">Scan the Library Card</h3>
+            <p class="text-slate-500 text-sm leading-relaxed">
+                Scan or type the patron's library card number in the <strong>Library Card</strong> field,
+                then press <kbd class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-xs font-mono">Enter</kbd>
+                or click <strong>Look Up Patron</strong>.
+            </p>
+        </div>
+
+        <div class="step-card bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5">
+            <div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 font-bold text-lg
+                        flex items-center justify-center mb-4">2</div>
+            <h3 class="font-semibold text-slate-800 mb-2">Scan the Item Barcode</h3>
+            <p class="text-slate-500 text-sm leading-relaxed">
+                Scan the item barcode in the action panel. Add a week prefix
+                (<code class="bg-slate-100 text-slate-700 px-1 rounded font-mono text-xs">2W</code>,
+                <code class="bg-slate-100 text-slate-700 px-1 rounded font-mono text-xs">3W</code>)
+                before the barcode to override the default 3-week loan period.
+            </p>
+        </div>
+
+        <div class="step-card bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5">
+            <div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 font-bold text-lg
+                        flex items-center justify-center mb-4">3</div>
+            <h3 class="font-semibold text-slate-800 mb-2">Submit</h3>
+            <p class="text-slate-500 text-sm leading-relaxed">
+                Press <kbd class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-xs font-mono">Enter</kbd>
+                or click <strong>Checkout</strong>. The item appears in the patron's active list instantly
+                and the barcode field clears for the next scan.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ── Barcode prefixes + Actions ───────────────────────────── -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+
+    <!-- Barcode prefix table -->
+    <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5">
+        <div class="flex items-center gap-2 mb-4">
+            <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125
+                             1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0
+                             013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621
+                             0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125
+                             1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5
+                             4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125
+                             1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0
+                             0113.5 9.375v-4.5z"/>
+                </svg>
+            </div>
+            <h2 class="font-semibold text-slate-800">Barcode Week Prefixes</h2>
+        </div>
+        <p class="text-slate-500 text-sm mb-4 leading-relaxed">
+            Type or scan the prefix immediately before the barcode digits to override the
+            default 3-week checkout period. The prefix is case-insensitive.
+        </p>
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-xs text-slate-500 uppercase tracking-wider border-b border-slate-100">
+                    <th class="pb-2 text-left font-medium">Prefix</th>
+                    <th class="pb-2 text-left font-medium">Loan Period</th>
+                    <th class="pb-2 text-left font-medium">Example Input</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-50">
+                <tr>
+                    <td class="py-2.5">
+                        <code class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono text-xs">1W</code>
+                    </td>
+                    <td class="py-2.5 text-slate-700">1 week</td>
+                    <td class="py-2.5 font-mono text-xs text-slate-400">1W1234567890</td>
+                </tr>
+                <tr>
+                    <td class="py-2.5">
+                        <code class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono text-xs">2W</code>
+                    </td>
+                    <td class="py-2.5 text-slate-700">2 weeks</td>
+                    <td class="py-2.5 font-mono text-xs text-slate-400">2W1234567890</td>
+                </tr>
+                <tr>
+                    <td class="py-2.5">
+                        <code class="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-mono text-xs">3W</code>
+                        <span class="ml-1 text-xs text-slate-400 font-sans">default</span>
+                    </td>
+                    <td class="py-2.5 text-slate-700">3 weeks</td>
+                    <td class="py-2.5 font-mono text-xs text-slate-400">3W1234567890 or just 1234567890</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Actions reference -->
+    <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5">
+        <div class="flex items-center gap-2 mb-4">
+            <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875
+                             1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z"/>
+                </svg>
+            </div>
+            <h2 class="font-semibold text-slate-800">Actions</h2>
+        </div>
+        <div class="space-y-3">
+            <div class="flex gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                <span class="text-emerald-600 font-bold text-xl mt-0.5 w-6 text-center flex-shrink-0">↓</span>
+                <div>
+                    <h4 class="font-semibold text-emerald-800 text-sm">Checkout</h4>
+                    <p class="text-emerald-700 text-xs mt-0.5 leading-relaxed">
+                        Loans an item to the patron. Creates a record with a calculated due date based on the
+                        week prefix (default 3 weeks from today).
+                    </p>
+                </div>
+            </div>
+            <div class="flex gap-3 p-3 rounded-xl bg-blue-50 border border-blue-100">
+                <span class="text-blue-600 font-bold text-xl mt-0.5 w-6 text-center flex-shrink-0">↑</span>
+                <div>
+                    <h4 class="font-semibold text-blue-800 text-sm">Return</h4>
+                    <p class="text-blue-700 text-xs mt-0.5 leading-relaxed">
+                        Marks an item as returned. Releases it from the patron's account so it can be
+                        checked out again. Logs a separate audit entry.
+                    </p>
+                </div>
+            </div>
+            <div class="flex gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
+                <span class="text-amber-600 font-bold text-xl mt-0.5 w-6 text-center flex-shrink-0">↻</span>
+                <div>
+                    <h4 class="font-semibold text-amber-800 text-sm">Renew</h4>
+                    <p class="text-amber-700 text-xs mt-0.5 leading-relaxed">
+                        Extends the due date from <em>today</em>. Use week prefixes (1W / 2W / 3W) before
+                        the barcode to set the new renewal period.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Categories + Tips ─────────────────────────────────────── -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+
+    <!-- Item categories -->
+    <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5">
+        <div class="flex items-center gap-2 mb-4">
+            <div class="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659
+                             1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0
+                             005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0
+                             009.568 3z"/>
+                </svg>
+            </div>
+            <h2 class="font-semibold text-slate-800">Item Categories</h2>
+        </div>
+        <p class="text-slate-500 text-sm mb-4">
+            Select a category when checking out. Used for filtering in History and printed on receipts.
+        </p>
+        <div class="grid grid-cols-2 gap-2.5 text-sm">
+            <div class="flex items-center gap-2 text-slate-600">
+                <span class="text-lg">📖</span>
+                <span>Book <span class="text-xs text-slate-400">(default)</span></span>
+            </div>
+            <div class="flex items-center gap-2 text-slate-600"><span class="text-lg">📀</span> DVD</div>
+            <div class="flex items-center gap-2 text-slate-600"><span class="text-lg">🎧</span> Audiobook</div>
+            <div class="flex items-center gap-2 text-slate-600"><span class="text-lg">📰</span> Magazine</div>
+            <div class="flex items-center gap-2 text-slate-600"><span class="text-lg">💾</span> eBook</div>
+            <div class="flex items-center gap-2 text-slate-600"><span class="text-lg">📦</span> Other</div>
+        </div>
+    </div>
+
+    <!-- Tips -->
+    <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5">
+        <div class="flex items-center gap-2 mb-4">
+            <div class="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0
+                             01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75
+                             2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823
+                             1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333
+                             1.509 2.316V18"/>
+                </svg>
+            </div>
+            <h2 class="font-semibold text-slate-800">Tips &amp; Shortcuts</h2>
+        </div>
+        <ul class="space-y-3 text-sm">
+            <li class="flex gap-2.5 text-slate-600">
+                <span class="text-teal-500 flex-shrink-0 mt-0.5">⌨</span>
+                Press <kbd class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-xs font-mono mx-1">Enter</kbd>
+                in any field to submit — no mouse required for the full workflow.
+            </li>
+            <li class="flex gap-2.5 text-slate-600">
+                <span class="text-teal-500 flex-shrink-0 mt-0.5">🔄</span>
+                After each checkout the barcode field auto-clears so you can scan the next item immediately.
+            </li>
+            <li class="flex gap-2.5 text-slate-600">
+                <span class="text-teal-500 flex-shrink-0 mt-0.5">🖨</span>
+                <strong>Print Receipt</strong> opens a PDF listing all currently-out items with due dates.
+            </li>
+            <li class="flex gap-2.5 text-slate-600">
+                <span class="text-teal-500 flex-shrink-0 mt-0.5">🔍</span>
+                <a href="/history" class="text-indigo-600 hover:underline font-medium">History</a>
+                lets you view all transactions per patron and filter by action type.
+            </li>
+            <li class="flex gap-2.5 text-slate-600">
+                <span class="text-teal-500 flex-shrink-0 mt-0.5">⚠</span>
+                Late items display in <span class="text-rose-600 font-semibold">red</span>. The patron
+                card's Late count also turns red when overdue items exist.
+            </li>
+        </ul>
+    </div>
+</div>
+
+<!-- ── New patron registration ───────────────────────────────── -->
+<section class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 mb-8">
+    <div class="flex items-center gap-2 mb-4">
+        <div class="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center flex-shrink-0">
+            <svg class="w-4 h-4 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375
+                         3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318
+                         0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z"/>
+            </svg>
+        </div>
+        <h2 class="font-semibold text-slate-800">Registering a New Patron</h2>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+            <p class="text-slate-500 text-sm mb-3 leading-relaxed">
+                When a library card number is not found in the system, a
+                <strong>registration dialog</strong> appears automatically. Fill in the patron's
+                name and optionally their email address, then click <strong>Register Patron</strong>.
+            </p>
+            <p class="text-slate-600 text-sm font-medium mb-1">Name format — either works:</p>
+            <ul class="text-slate-500 text-sm list-none space-y-1 mb-3">
+                <li>
+                    <code class="bg-slate-100 text-slate-700 px-1.5 rounded font-mono text-xs">LAST, FIRST</code>
+                    — e.g. <code class="bg-slate-100 text-slate-700 px-1.5 rounded font-mono text-xs">SMITH, JOHN</code>
+                </li>
+                <li>
+                    <code class="bg-slate-100 text-slate-700 px-1.5 rounded font-mono text-xs">First Last</code>
+                    — e.g. <code class="bg-slate-100 text-slate-700 px-1.5 rounded font-mono text-xs">John Smith</code>
+                </li>
+            </ul>
+            <p class="text-slate-400 text-xs">Names are stored uppercase in LAST, FIRST format.</p>
+        </div>
+        <div class="bg-slate-50/80 rounded-xl p-4">
+            <p class="font-medium text-slate-700 text-sm mb-2">Card number rules</p>
+            <ul class="space-y-1.5 text-xs text-slate-600">
+                <li class="flex gap-2"><span class="text-indigo-400">•</span> Must be exactly <strong>10 or 14 digits</strong></li>
+                <li class="flex gap-2"><span class="text-indigo-400">•</span> Digits only — no letters, spaces, or dashes</li>
+                <li class="flex gap-2"><span class="text-indigo-400">•</span> Same validation rules as item barcodes</li>
+                <li class="flex gap-2"><span class="text-indigo-400">•</span> Each card number must be unique in the system</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- ── FAQ ───────────────────────────────────────────────────── -->
+<section class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 mb-8">
+    <h2 class="font-bold text-slate-900 mb-1">Frequently Asked Questions</h2>
+    <p class="text-slate-500 text-sm mb-4">Click a question to expand the answer.</p>
+
+    <details class="faq-item">
+        <summary>
+            Can the same item be checked out twice at once?
+            <svg class="faq-chevron w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+            </svg>
+        </summary>
+        <div class="faq-answer">
+            No. The system prevents duplicate active checkouts for the same barcode. The item must be
+            returned before it can be checked out again.
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>
+            What happens if I try to return an item that isn't checked out?
+            <svg class="faq-chevron w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+            </svg>
+        </summary>
+        <div class="faq-answer">
+            The system shows an error message. Only items with an active checkout record can be returned.
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>
+            How do I renew for 1 or 2 weeks instead of 3?
+            <svg class="faq-chevron w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+            </svg>
+        </summary>
+        <div class="faq-answer">
+            Switch to the <strong>Renew</strong> tab and prefix the barcode when scanning. For example,
+            scan or type <code class="bg-slate-100 px-1 rounded font-mono text-xs">2W1234567890</code>
+            to renew for 2 weeks from today.
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>
+            Where does the receipt go?
+            <svg class="faq-chevron w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+            </svg>
+        </summary>
+        <div class="faq-answer">
+            Clicking <strong>Print Receipt</strong> generates a PDF in a new tab containing all of the
+            patron's currently-checked-out items with their due dates. Print or save it from the browser.
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>
+            Can a patron have multiple items out at once?
+            <svg class="faq-chevron w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+            </svg>
+        </summary>
+        <div class="faq-answer">
+            Yes. There is no system-enforced limit. Scan each item barcode one at a time to add them all
+            to the same patron's account.
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>
+            How do I customise the background or icon?
+            <svg class="faq-chevron w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+            </svg>
+        </summary>
+        <div class="faq-answer">
+            Drop image files into the <code class="bg-slate-100 px-1 rounded font-mono text-xs">client/static/images/</code> folder:
+            <ul class="list-disc ml-5 mt-2 space-y-1">
+                <li>
+                    <code class="bg-slate-100 px-1 rounded font-mono text-xs">background.jpg</code>
+                    (or <code class="bg-slate-100 px-1 rounded font-mono text-xs">.png</code> /
+                    <code class="bg-slate-100 px-1 rounded font-mono text-xs">.webp</code>) — full-page
+                    background, shown semi-transparently.
+                </li>
+                <li>
+                    <code class="bg-slate-100 px-1 rounded font-mono text-xs">icon.png</code>
+                    (or <code class="bg-slate-100 px-1 rounded font-mono text-xs">.svg</code> /
+                    <code class="bg-slate-100 px-1 rounded font-mono text-xs">.ico</code>) — replaces the
+                    default book icon in the header and browser tab.
+                </li>
+            </ul>
+            Restart the server after adding images — no code changes needed.
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>
+            Is patron email stored anywhere external?
+            <svg class="faq-chevron w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+            </svg>
+        </summary>
+        <div class="faq-answer">
+            No. Email is optional and stored only in the local SQLite database
+            (<code class="bg-slate-100 px-1 rounded font-mono text-xs">data/library.db</code>). It is
+            never transmitted to any external service.
+        </div>
+    </details>
+</section>
+
+<!-- ── CTA back to checkout ──────────────────────────────────── -->
+<div class="text-center">
+    <a href="/"
+       class="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-xl
+              font-medium hover:bg-indigo-700 transition-colors shadow-sm">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/>
+        </svg>
+        Back to Checkout
+    </a>
+</div>
+
+{% endblock %}

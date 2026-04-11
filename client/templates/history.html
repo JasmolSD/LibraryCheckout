@@ -1,45 +1,153 @@
 {% extends "base.html" %}
+{% block title %}Patron History{% endblock %}
+
 {% block content %}
 <div x-data="historyApp()" x-init="init()">
-    <div class="bg-white rounded-xl shadow p-5 mb-4">
-        <h2 class="font-semibold mb-3">Patron History</h2>
-        <div class="flex gap-2">
-            <input x-model="card" @keydown.enter="load()" type="text" placeholder="Library card #"
-                class="flex-1 border rounded-lg px-3 py-2" />
-            <button @click="load()" class="bg-indigo-600 text-white px-4 rounded-lg hover:bg-indigo-700">Load</button>
+
+    <!-- ── Card lookup ──────────────────────────────────────── -->
+    <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 mb-5">
+        <div class="flex items-center gap-2 mb-3">
+            <svg class="w-4 h-4 text-indigo-500 flex-shrink-0" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <h2 class="font-semibold text-slate-800 text-sm">Patron History</h2>
         </div>
+        <div class="flex gap-2">
+            <input x-model="card"
+                   @keydown.enter="load()"
+                   type="text"
+                   placeholder="Scan or enter library card number"
+                   autofocus
+                   class="flex-1 border border-slate-300 rounded-lg px-3 py-2.5 font-mono text-sm
+                          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+            <button @click="load()"
+                    :disabled="loading"
+                    class="bg-indigo-600 text-white px-5 rounded-lg hover:bg-indigo-700 font-medium text-sm
+                           transition-colors flex items-center gap-2 disabled:opacity-50">
+                <span x-show="loading" class="spinner"></span>
+                <span>Load</span>
+            </button>
+        </div>
+        <!-- Inline error message (replaces alert()) -->
+        <p x-show="errMsg"
+           x-text="errMsg"
+           class="mt-2 text-sm text-rose-600 flex items-center gap-1.5">
+        </p>
     </div>
 
+    <!-- ── Results ──────────────────────────────────────────── -->
     <template x-if="data">
-        <div class="bg-white rounded-xl shadow p-5">
-            <h3 class="text-xl font-bold" x-text="data.patron.name"></h3>
-            <p class="text-slate-500" x-text="data.patron.card_masked"></p>
-            <table class="w-full text-sm mt-4">
-                <thead class="text-left bg-slate-100">
-                    <tr>
-                        <th class="p-2">Date</th>
-                        <th>Action</th>
-                        <th>Barcode</th>
-                        <th>Category</th>
-                        <th>Due</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template x-for="row in data.history" :key="row.id">
-                        <tr class="border-b">
-                            <td class="p-2" x-text="row.checked_out_at.slice(0,10)"></td>
-                            <td><span :class="badgeClass(row.action)" class="px-2 py-1 rounded text-xs uppercase"
-                                    x-text="row.action"></span></td>
-                            <td class="font-mono" x-text="row.barcode"></td>
-                            <td x-text="row.category"></td>
-                            <td :class="row.is_late ? 'text-rose-600 font-bold' : ''"
-                                x-text="row.due_date ? row.due_date.slice(0,10) : '—'"></td>
+        <div>
+
+            <!-- Patron header + stats -->
+            <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 mb-4">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+
+                    <!-- Avatar + name -->
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-full avatar-gradient flex items-center justify-center
+                                    text-white font-bold text-lg flex-shrink-0"
+                             x-text="initials(data.patron.name)"></div>
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-900" x-text="data.patron.name"></h3>
+                            <p class="text-sm text-slate-400 font-mono" x-text="data.patron.card_masked"></p>
+                        </div>
+                    </div>
+
+                    <!-- Stat pills -->
+                    <div class="flex gap-6 text-center">
+                        <div>
+                            <div class="text-2xl font-bold text-slate-900" x-text="data.total_checkouts"></div>
+                            <div class="text-xs text-slate-500">Total</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-emerald-600" x-text="data.currently_out"></div>
+                            <div class="text-xs text-slate-500">Out</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold"
+                                 :class="data.late_count > 0 ? 'text-rose-600' : 'text-slate-900'"
+                                 x-text="data.late_count"></div>
+                            <div class="text-xs text-slate-500">Late</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-slate-900" x-text="data.account_age_days"></div>
+                            <div class="text-xs text-slate-500">Days</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter tabs -->
+            <div class="flex flex-wrap gap-1.5 mb-4">
+                <template x-for="f in ['all', 'checkout', 'return', 'renew']" :key="f">
+                    <button @click="filter = f"
+                            :class="filter === f
+                                ? 'bg-indigo-600 text-white shadow-sm'
+                                : 'bg-white/90 text-slate-600 border border-slate-200 hover:border-indigo-300 hover:text-indigo-600'"
+                            class="px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors">
+                        <span x-text="f === 'all' ? 'All Transactions' : f.charAt(0).toUpperCase() + f.slice(1) + 's'"></span>
+                        <span class="ml-1 opacity-60"
+                              x-text="'(' + countFor(f) + ')'"></span>
+                    </button>
+                </template>
+            </div>
+
+            <!-- Transaction table -->
+            <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-slate-50/80 border-b border-slate-200 text-xs text-slate-500
+                                   uppercase tracking-wider">
+                            <th class="px-4 py-3 text-left font-medium">Date</th>
+                            <th class="px-4 py-3 text-left font-medium">Action</th>
+                            <th class="px-4 py-3 text-left font-medium">Barcode</th>
+                            <th class="px-4 py-3 text-left font-medium hidden md:table-cell">Title</th>
+                            <th class="px-4 py-3 text-left font-medium hidden sm:table-cell">Category</th>
+                            <th class="px-4 py-3 text-left font-medium">Due</th>
                         </tr>
-                    </template>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        <template x-for="row in filteredHistory()" :key="row.id">
+                            <tr>
+                                <td class="px-4 py-3 text-slate-500 text-xs whitespace-nowrap"
+                                    x-text="row.checked_out_at.slice(0, 10)"></td>
+                                <td class="px-4 py-3">
+                                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold"
+                                          :class="badgeClass(row.action)"
+                                          x-text="row.action"></span>
+                                </td>
+                                <td class="px-4 py-3 font-mono text-xs text-slate-600"
+                                    x-text="row.barcode"></td>
+                                <td class="px-4 py-3 text-slate-700 max-w-[160px] truncate hidden md:table-cell"
+                                    x-text="row.title || '—'"></td>
+                                <td class="px-4 py-3 hidden sm:table-cell">
+                                    <span class="px-2 py-0.5 rounded-full text-xs font-medium"
+                                          :class="categoryBadge(row.category)"
+                                          x-text="row.category"></span>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <span :class="row.is_late ? 'text-rose-600 font-semibold' : 'text-slate-700'"
+                                          x-text="row.due_date ? row.due_date.slice(0, 10) : '—'"></span>
+                                </td>
+                            </tr>
+                        </template>
+
+                        <!-- Empty state -->
+                        <tr x-show="filteredHistory().length === 0">
+                            <td colspan="6" class="px-4 py-10 text-center text-slate-400 text-sm">
+                                No transactions found for this filter.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
         </div>
     </template>
+
 </div>
 {% endblock %}
 

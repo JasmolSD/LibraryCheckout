@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
+
 from flask import current_app
 
 from ..database import db
@@ -15,7 +16,28 @@ from .validators import (
 )
 
 
+def _utcnow() -> datetime:
+    """Return current UTC time as a naive datetime (SQLite-compatible)."""
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
 def get_or_create_patron(card: str, name: str | None = None, email: str | None = None) -> Patron:
+    """Look up a patron by card number, registering a new one if not found.
+
+    Args:
+        card: Raw library card number (validated internally).
+        name: Required only when the patron does not yet exist.  Accepts
+            "LAST, FIRST" or "First Last" format — normalised to upper-case
+            "LAST, FIRST" before storage.
+        email: Optional contact email address.
+
+    Returns:
+        The existing or newly-created :class:`~server.app.models.Patron`.
+
+    Raises:
+        ValidationError: If the card number is invalid, or if ``name`` is
+            omitted for a new patron.
+    """
     card = validate_card(card)
     patron = Patron.query.filter_by(card_number=card).first()
     if patron:
@@ -30,6 +52,19 @@ def get_or_create_patron(card: str, name: str | None = None, email: str | None =
 
 
 def get_or_create_book(barcode: str, title: str | None = None, category: str = "book") -> Book:
+    """Look up an item by barcode, creating a new record if not found.
+
+    If the book already exists but has no title, and a ``title`` is provided,
+    the existing record is updated in-place without committing (caller must commit).
+
+    Args:
+        barcode: Validated 10- or 14-digit item barcode.
+        title: Optional human-readable item title.
+        category: Item category string (default ``"book"``).
+
+    Returns:
+        The existing or newly-flushed :class:`~server.app.models.Book`.
+    """
     book = Book.query.filter_by(barcode=barcode).first()
     if book:
         if title and not book.title:
@@ -63,7 +98,7 @@ def checkout_item(
     if existing:
         raise ValidationError(f"Item {barcode} is already checked out")
 
-    now = datetime.utcnow()
+    now = _utcnow()
     due = now + timedelta(weeks=weeks)
     co = Checkout(
         patron_id=patron.id,
@@ -82,6 +117,19 @@ def checkout_item(
 
 
 def return_item(barcode: str) -> Checkout:
+    """Mark the active checkout for an item as returned and log an audit row.
+
+    Args:
+        barcode: Raw item barcode (week prefix stripped automatically).
+
+    Returns:
+        The newly-created ``action="return"`` :class:`~server.app.models.Checkout`
+        audit record.
+
+    Raises:
+        ValidationError: If the barcode is unknown or the item is not currently
+            checked out.
+    """
     barcode = parse_checkout_prefix(barcode)[0]
     book = Book.query.filter_by(barcode=barcode).first()
     if not book:
@@ -91,14 +139,14 @@ def return_item(barcode: str) -> Checkout:
     if not active:
         raise ValidationError(f"Item {barcode} is not currently checked out")
 
-    active.returned_at = datetime.utcnow()
+    active.returned_at = _utcnow()
     # Log a separate audit row for the return action
     ret = Checkout(
         patron_id=active.patron_id,
         book_id=book.id,
         action="return",
         weeks=0,
-        checked_out_at=datetime.utcnow(),
+        checked_out_at=_utcnow(),
     )
     db.session.add(ret)
     db.session.commit()
@@ -107,6 +155,19 @@ def return_item(barcode: str) -> Checkout:
 
 
 def renew_item(barcode: str, weeks: int = 3) -> Checkout:
+    """Extend the due date of an active checkout from today.
+
+    Args:
+        barcode: Raw item barcode (week prefix stripped automatically).
+        weeks: Number of weeks to add from today (default 3).
+
+    Returns:
+        The updated :class:`~server.app.models.Checkout` record.
+
+    Raises:
+        ValidationError: If the barcode is unknown or the item is not currently
+            checked out.
+    """
     barcode = parse_checkout_prefix(barcode)[0]
     book = Book.query.filter_by(barcode=barcode).first()
     if not book:
@@ -114,7 +175,7 @@ def renew_item(barcode: str, weeks: int = 3) -> Checkout:
     active = Checkout.query.filter_by(book_id=book.id, action="checkout", returned_at=None).first()
     if not active:
         raise ValidationError(f"Item {barcode} is not currently checked out")
-    active.due_date = datetime.utcnow() + timedelta(weeks=weeks)
+    active.due_date = _utcnow() + timedelta(weeks=weeks)
     active.weeks = weeks
     db.session.commit()
     current_app.logger.info("Renew: book=%s weeks=%d", barcode, weeks)
@@ -134,7 +195,7 @@ def patron_summary(card: str) -> dict:
 
     return {
         "patron": patron.to_dict(),
-        "account_age_days": (datetime.utcnow() - patron.created_at).days,
+        "account_age_days": (_utcnow() - patron.created_at).days,
         "total_checkouts": len(all_checkouts),
         "currently_out": len(active),
         "late_count": len(late),
