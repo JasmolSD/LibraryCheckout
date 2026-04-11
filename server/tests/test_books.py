@@ -3,19 +3,21 @@
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 # ── POST /api/books/ ─────────────────────────────────────────────────────────
 
+
 class TestAddBook:
     def test_add_book_isbn13(self, client):
-        r = client.post("/api/books/", json={
-            "barcode": "9780451524935",
-            "title": "Nineteen Eighty-Four",
-            "author": "George Orwell",
-            "category": "book",
-        })
+        r = client.post(
+            "/api/books/",
+            json={
+                "barcode": "9780451524935",
+                "title": "Nineteen Eighty-Four",
+                "author": "George Orwell",
+                "category": "book",
+            },
+        )
         assert r.status_code == 201
         data = r.get_json()
         assert data["barcode"] == "9780451524935"
@@ -42,10 +44,13 @@ class TestAddBook:
         assert data["category"] == "book"
 
     def test_add_book_explicit_category(self, client):
-        r = client.post("/api/books/", json={
-            "barcode": "9780451524935",
-            "category": "dvd",
-        })
+        r = client.post(
+            "/api/books/",
+            json={
+                "barcode": "9780451524935",
+                "category": "dvd",
+            },
+        )
         assert r.status_code == 201
         assert r.get_json()["category"] == "dvd"
 
@@ -70,28 +75,34 @@ class TestAddBook:
     def test_added_book_is_checkable(self, client, patron):
         """A book added via /api/books/ can subsequently be checked out."""
         client.post("/api/books/", json={"barcode": "9780451524935", "title": "1984"})
-        r = client.post("/api/checkouts/", json={
-            "card_number": "1234567890",
-            "barcode": "9780451524935",
-        })
+        r = client.post(
+            "/api/checkouts/",
+            json={
+                "card_number": "1234567890",
+                "barcode": "9780451524935",
+            },
+        )
         assert r.status_code == 201
 
 
 # ── GET /api/books/lookup ─────────────────────────────────────────────────────
 
+
 class TestLookupIsbn:
     def _make_google_mock(self, title="Test Title", authors=None, categories=None):
         """Return a context-manager mock that simulates a Google Books response."""
         payload = {
-            "items": [{
-                "volumeInfo": {
-                    "title": title,
-                    "authors": authors or ["Test Author"],
-                    "categories": categories or ["Fiction"],
-                    "publishedDate": "2001",
-                    "description": "A test book description.",
+            "items": [
+                {
+                    "volumeInfo": {
+                        "title": title,
+                        "authors": authors or ["Test Author"],
+                        "categories": categories or ["Fiction"],
+                        "publishedDate": "2001",
+                        "description": "A test book description.",
+                    }
                 }
-            }]
+            ]
         }
         mock = MagicMock()
         mock.__enter__ = lambda s: s
@@ -100,8 +111,9 @@ class TestLookupIsbn:
         return mock
 
     def test_lookup_found(self, client):
-        with patch("server.app.routes.books.urllib.request.urlopen",
-                   return_value=self._make_google_mock()):
+        with patch(
+            "server.app.routes.books.urllib.request.urlopen", return_value=self._make_google_mock()
+        ):
             r = client.get("/api/books/lookup?isbn=9780451524935")
         assert r.status_code == 200
         data = r.get_json()
@@ -111,14 +123,18 @@ class TestLookupIsbn:
         assert data["category"] == "book"
 
     def test_lookup_dvd_category_mapping(self, client):
-        with patch("server.app.routes.books.urllib.request.urlopen",
-                   return_value=self._make_google_mock(categories=["DVD & Film"])):
+        with patch(
+            "server.app.routes.books.urllib.request.urlopen",
+            return_value=self._make_google_mock(categories=["DVD & Film"]),
+        ):
             r = client.get("/api/books/lookup?isbn=9780451524935")
         assert r.get_json()["category"] == "dvd"
 
     def test_lookup_audiobook_category_mapping(self, client):
-        with patch("server.app.routes.books.urllib.request.urlopen",
-                   return_value=self._make_google_mock(categories=["Audiobook"])):
+        with patch(
+            "server.app.routes.books.urllib.request.urlopen",
+            return_value=self._make_google_mock(categories=["Audiobook"]),
+        ):
             r = client.get("/api/books/lookup?isbn=9780451524935")
         assert r.get_json()["category"] == "audiobook"
 
@@ -135,8 +151,11 @@ class TestLookupIsbn:
 
     def test_lookup_service_unavailable(self, client):
         import urllib.error
-        with patch("server.app.routes.books.urllib.request.urlopen",
-                   side_effect=urllib.error.URLError("timeout")):
+
+        with patch(
+            "server.app.routes.books.urllib.request.urlopen",
+            side_effect=urllib.error.URLError("timeout"),
+        ):
             r = client.get("/api/books/lookup?isbn=9780451524935")
         assert r.status_code == 200
         data = r.get_json()
@@ -153,6 +172,7 @@ class TestLookupIsbn:
 
 # ── GET /api/patrons/next-card ────────────────────────────────────────────────
 
+
 class TestNextCard:
     def test_returns_14_digit_number_on_empty_db(self, client):
         r = client.get("/api/patrons/next-card")
@@ -164,24 +184,30 @@ class TestNextCard:
 
     def test_increments_from_highest_existing_card(self, client):
         # Register a patron with a specific 14-digit card
-        client.post("/api/patrons/", json={
-            "card_number": "10000000000005",
-            "first_name": "Alice",
-            "last_name": "Smith",
-            "birth_date": "1990-01-01",
-        })
+        client.post(
+            "/api/patrons/",
+            json={
+                "card_number": "10000000000005",
+                "first_name": "Alice",
+                "last_name": "Smith",
+                "birth_date": "1990-01-01",
+            },
+        )
         r = client.get("/api/patrons/next-card")
         assert r.get_json()["card_number"] == "10000000000006"
 
     def test_ignores_short_cards_below_14digit_base(self, client):
         # A 10-digit card is numerically smaller than the 14-digit base,
         # so next-card should still start at the base.
-        client.post("/api/patrons/", json={
-            "card_number": "9999999999",
-            "first_name": "Bob",
-            "last_name": "Jones",
-            "birth_date": "1985-06-15",
-        })
+        client.post(
+            "/api/patrons/",
+            json={
+                "card_number": "9999999999",
+                "first_name": "Bob",
+                "last_name": "Jones",
+                "birth_date": "1985-06-15",
+            },
+        )
         r = client.get("/api/patrons/next-card")
         assert r.get_json()["card_number"] == "10000000000001"
 
