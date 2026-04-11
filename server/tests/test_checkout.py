@@ -53,6 +53,13 @@ def test_summary_counts(app, patron):
     assert s["late_count"] == 0
 
 
+def test_renew_bad_weeks_returns_400(client, patron):
+    client.post("/api/checkouts/", json={"card_number": "1234567890", "barcode": "9999999999"})
+    r = client.post("/api/checkouts/renew", json={"barcode": "9999999999", "weeks": "not-a-number"})
+    assert r.status_code == 400
+    assert "integer" in r.get_json()["error"]
+
+
 def test_categories_persisted(app, patron):
     co = checkout_service.checkout_item(card="1234567890", item_input="3333333333", category="dvd")
     assert co.book.category == "dvd"

@@ -75,7 +75,11 @@ def renew_item():
     """
     data = request.get_json() or {}
     try:
-        co = checkout_service.renew_item(data.get("barcode", ""), int(data.get("weeks", 3)))
+        weeks = int(data.get("weeks", 3))
+    except (ValueError, TypeError):
+        return jsonify({"error": "weeks must be an integer"}), 400
+    try:
+        co = checkout_service.renew_item(data.get("barcode", ""), weeks)
         return jsonify(co.to_dict())
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400

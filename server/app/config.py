@@ -35,8 +35,13 @@ class BaseConfig:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    LIBRARY_BRANCH = os.getenv("LIBRARY_BRANCH", "Fresno Central Library")
-    LIBRARY_PHONE = os.getenv("LIBRARY_PHONE", "(559) 600-7323")
+    LIBRARY_NAME = os.getenv("LIBRARY_NAME", "Library")
+    LIBRARY_BRANCH = os.getenv("LIBRARY_BRANCH", "Main Branch")
+    LIBRARY_PHONE = os.getenv("LIBRARY_PHONE", "")
+    LIBRARY_EMAIL = os.getenv("LIBRARY_EMAIL", "")
+    LIBRARY_ADDRESS = os.getenv("LIBRARY_ADDRESS", "")
+    LIBRARY_HOURS = os.getenv("LIBRARY_HOURS", "")
+    APP_TITLE = os.getenv("APP_TITLE", "Library Checkout")
 
     # Default checkout period in weeks (matches the legacy VBA default)
     DEFAULT_CHECKOUT_WEEKS = 3

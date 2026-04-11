@@ -151,8 +151,9 @@ uv run black --check .       # check formatting without changing files
 |---|---|---|
 | **CI** (`.github/workflows/ci.yml`) | Push / PR to `main` | Ruff lint, Black format check, pytest on Python 3.11 & 3.12 |
 | **CD** (`.github/workflows/cd.yml`) | Push to `main` or published Release | Build & push Docker image to `ghcr.io` |
+| **Release** (`.github/workflows/release.yml`) | Published GitHub Release | Build `LibraryCheckout.exe` and attach to the release |
 
-No secrets need to be configured — the Docker push uses the built-in `GITHUB_TOKEN`.
+No secrets need to be configured — all workflows use the built-in `GITHUB_TOKEN`.
 
 ## Project Layout
 
@@ -160,11 +161,13 @@ No secrets need to be configured — the Docker push uses the built-in `GITHUB_T
 library-checkout/
 ├── pyproject.toml              # uv project config + tool settings
 ├── run.py                      # desktop launcher (Flask + pywebview)
+├── Start.bat                   # double-click launcher for Windows (requires uv)
 ├── .env                        # local environment overrides (not committed)
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml              # lint + test pipeline
-│       └── cd.yml              # Docker build & push pipeline
+│       ├── cd.yml              # Docker build & push pipeline
+│       └── release.yml         # Windows .exe build attached to GitHub Releases
 ├── server/
 │   ├── app/
 │   │   ├── __init__.py         # app factory + context processor
@@ -204,14 +207,124 @@ library-checkout/
     └── Dockerfile              # Headless API image
 ```
 
-## Building a Standalone Executable
+## Distributing to End Users
+
+### Option A — Download the pre-built installer (recommended)
+
+Every [GitHub Release](../../releases) automatically includes a `LibraryCheckout.exe`
+built by the `release.yml` workflow.  End users:
+
+1. Download `LibraryCheckout.exe` from the latest release.
+2. Double-click it — no Python, no uv, no installation required.
+3. A `data/` folder is created next to the `.exe` on first run to store the database.
+
+> **Note:** Windows may show a SmartScreen warning the first time because the binary
+> is not code-signed.  Click **More info → Run anyway**.
+
+### Option B — Double-click launcher (for developers)
+
+If you have the dev environment set up, double-click **`Start.bat`** in the project root.
+It syncs dependencies and launches the app without opening a terminal.
+
+### Option C — Build the executable yourself
 
 ```bash
-uv run pyinstaller --windowed --onefile --name LibraryCheckout run.py
+uv sync --group desktop --group dev   # ensure pyinstaller is available
+
+uv run pyinstaller \
+    --windowed --onefile --name LibraryCheckout \
+    --collect-all pywebview \
+    --add-data "client;client" \
+    --add-data "server;server" \
+    run.py
 ```
 
-The resulting binary in `dist/` is fully self-contained — users do not need
-Python or any dependencies installed.
+The resulting `dist/LibraryCheckout.exe` is fully self-contained.
+
+> **Docker** is for headless server deployment only — it does not produce a desktop app.
+
+## Starting a Similar Project with AI
+
+The prompt below will reproduce the architecture and quality level of this project for any domain. Paste it at the start of a new conversation and fill in the bracketed sections.
+
+<details>
+<summary>Expand chatbot prompt</summary>
+
+```
+I want to build a [desktop / web / CLI] application called "[App Name]".
+
+## What it does
+[2–4 sentences describing the core workflow. Be specific: what does the user
+do, what does the app do with that, and what is the output?]
+
+## Who uses it
+[Describe the end user. Are they technical? Non-technical? How will they
+run the app — double-click on Windows, open a browser, use a terminal?]
+
+## Key features
+- [Feature 1]
+- [Feature 2]
+- [Feature 3]
+
+## Tech stack preferences
+- Language: [Python / TypeScript / Go / etc.]
+- Backend: [Flask / FastAPI / Express / etc., or "you choose"]
+- Frontend: [React / Jinja2 + Alpine.js / etc., or "you choose"]
+- Database: [SQLite / PostgreSQL / etc., or "you choose"]
+- Package manager: [uv / pip / npm / etc.]
+
+## Constraints
+- [e.g. "Must run on Windows without requiring users to install anything"]
+- [e.g. "No paid APIs or services"]
+- [e.g. "Data must stay local — no cloud storage"]
+
+---
+
+Please scaffold the full project with the following quality standards applied
+from the start:
+
+1. **Project layout** — clean separation of concerns (routes, services,
+   models, config, tests, static assets).
+
+2. **Configuration via .env** — all environment-specific values (app name,
+   contact info, secrets, URLs) must be in a .env file with a .env.example
+   template. No hardcoded strings anywhere in the codebase.
+
+3. **Security basics** — validate all user input at API boundaries; raise
+   meaningful errors (400/404/500) instead of unhandled exceptions; add
+   standard HTTP security headers; fail loudly at startup if a required
+   secret is missing in production.
+
+4. **Database** — index every column used in WHERE/filter clauses; use an
+   ORM with explicit relationships.
+
+5. **Tests** — pytest (or equivalent) covering the happy path, known edge
+   cases, and all HTTP status codes each endpoint can return. Aim for
+   meaningful coverage, not 100%.
+
+6. **Linting and formatting** — ruff + black (Python) or eslint + prettier
+   (JS/TS), configured in the project file, runnable with a single command.
+
+7. **CI/CD (GitHub Actions)** — lint + test on every push/PR; Docker image
+   build on merge to main; attach a standalone executable to GitHub Releases
+   if the app targets non-technical end users.
+
+8. **Docker** — non-root user, explicit HEALTHCHECK, BuildKit cache mounts,
+   lock file copied for reproducible installs.
+
+9. **Standalone executable** — if the target users are non-technical, include
+   a PyInstaller / pkg / nexe build step so they get a single double-clickable
+   file with no installation required.
+
+10. **Documentation** — docstrings on every public function (Args/Returns/
+    Raises); a README with quick-start, pages/API reference, and a
+    "Distributing to end users" section.
+
+Start by confirming you understand the requirements, then generate the full
+project structure and all files.
+```
+
+</details>
 
 ## License
 

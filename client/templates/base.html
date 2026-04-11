@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{% block title %}Library Checkout{% endblock %} — Fresno County Public Library</title>
+    <title>{% block title %}{{ app_title }}{% endblock %} — {{ library_name }}</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -59,8 +59,8 @@
                 </svg>
                 {% endif %}
                 <div>
-                    <h1 class="text-xl font-bold leading-tight tracking-tight">Library Checkout</h1>
-                    <p class="text-indigo-200 text-xs leading-tight">Fresno County Public Library</p>
+                    <h1 class="text-xl font-bold leading-tight tracking-tight">{{ app_title }}</h1>
+                    <p class="text-indigo-200 text-xs leading-tight">{{ library_name }}</p>
                 </div>
             </div>
 
@@ -96,8 +96,13 @@
     <!-- ── Footer ───────────────────────────────────────────── -->
     <footer class="relative z-10 bg-white/80 backdrop-blur-sm border-t border-slate-200 text-slate-500 text-xs py-3">
         <div class="max-w-7xl mx-auto px-6 flex items-center justify-between">
-            <span>Fresno County Public Library — Checkout System</span>
-            <span>(559) 600-7323</span>
+            <span>{{ library_name }}{% if library_branch %} — {{ library_branch }}{% endif %}</span>
+            <span class="flex items-center gap-4">
+                {%- if library_address %}<span>{{ library_address }}</span>{% endif %}
+                {%- if library_phone %}<span>{{ library_phone }}</span>{% endif %}
+                {%- if library_email %}<a href="mailto:{{ library_email }}" class="hover:text-indigo-600">{{ library_email }}</a>{% endif %}
+                {%- if library_hours %}<span>{{ library_hours }}</span>{% endif %}
+            </span>
         </div>
     </footer>
 

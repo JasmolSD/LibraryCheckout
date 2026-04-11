@@ -1,12 +1,16 @@
 """Desktop launcher: starts Flask in a background thread, opens a native window."""
 
+import os
 import sys
 import threading
 import time
 
 import webview
+from dotenv import load_dotenv
 
 from server.app import create_app
+
+load_dotenv()
 
 HOST = "127.0.0.1"
 PORT = 5000
@@ -24,8 +28,9 @@ def main() -> None:
     # Give Flask a moment to bind the port before opening the window
     time.sleep(1.0)
 
+    window_title = os.getenv("APP_TITLE", "Library Checkout")
     webview.create_window(
-        title="Library Checkout System",
+        title=window_title,
         url=f"http://{HOST}:{PORT}",
         width=1280,
         height=820,

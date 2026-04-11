@@ -40,6 +40,13 @@ def test_get_unknown_patron(client):
     assert r.status_code == 404
 
 
+def test_create_patron_returns_existing(client, patron):
+    """Posting the same card twice returns the existing patron unchanged."""
+    r = client.post("/api/patrons/", json={"card_number": "1234567890", "name": "DIFFERENT NAME"})
+    assert r.status_code == 201
+    assert r.get_json()["name"] == "DOE, JANE"
+
+
 def test_full_checkout_flow_via_api(client, patron):
     # Checkout
     r = client.post(

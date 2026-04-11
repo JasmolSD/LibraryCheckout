@@ -3,7 +3,7 @@
 Blueprinted under ``/api/receipts``.
 """
 
-from flask import Blueprint, Response, jsonify
+from flask import Blueprint, Response, current_app, jsonify
 
 from ..models import Patron
 from ..services.receipt_service import build_receipt_pdf
@@ -37,7 +37,12 @@ def receipt_for_active(card):
     if not active:
         return jsonify({"error": "No active checkouts to print"}), 400
 
-    pdf_bytes = build_receipt_pdf(patron, active)
+    try:
+        pdf_bytes = build_receipt_pdf(patron, active)
+    except Exception as exc:
+        current_app.logger.error("PDF generation failed: %s", exc)
+        return jsonify({"error": "Failed to generate receipt"}), 500
+
     return Response(
         pdf_bytes,
         mimetype="application/pdf",

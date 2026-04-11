@@ -67,8 +67,8 @@ class Checkout(db.Model):
     __tablename__ = "checkouts"
 
     id = db.Column(db.Integer, primary_key=True)
-    patron_id = db.Column(db.Integer, db.ForeignKey("patrons.id"), nullable=False)
-    book_id = db.Column(db.Integer, db.ForeignKey("books.id"), nullable=False)
+    patron_id = db.Column(db.Integer, db.ForeignKey("patrons.id"), nullable=False, index=True)
+    book_id = db.Column(db.Integer, db.ForeignKey("books.id"), nullable=False, index=True)
 
     # action: checkout | return | renew
     action = db.Column(db.String(20), default="checkout", nullable=False)

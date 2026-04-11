@@ -40,6 +40,13 @@ def create_app(config_name: str | None = None) -> Flask:
     # Load config
     app.config.from_object(get_config(config_name))
 
+    # Guard against deploying with the default insecure secret key
+    if app.config.get("ENV") == "production" and app.config["SECRET_KEY"] == "dev-secret-change-me":
+        raise RuntimeError(
+            "SECRET_KEY must be set to a strong random value in production. "
+            "Set the SECRET_KEY environment variable."
+        )
+
     # Make sure data + log directories exist
     Path(app.config["DATA_DIR"]).mkdir(parents=True, exist_ok=True)
     Path(app.config["LOG_DIR"]).mkdir(parents=True, exist_ok=True)
@@ -49,18 +56,31 @@ def create_app(config_name: str | None = None) -> Flask:
     CORS(app, resources={r"/api/*": {"origins": "*"}})
     setup_logging(app)
 
+    @app.after_request
+    def set_security_headers(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
+
     # Context processor: detect background / icon images in client/static/images/
     images_dir = project_root / "client" / "static" / "images"
 
     @app.context_processor
-    def inject_static_images() -> dict:
-        """Jinja2 context processor: expose ``bg_image`` and ``icon_image``.
+    def inject_template_globals() -> dict:
+        """Jinja2 context processor: expose library config and image paths.
 
-        Searches ``client/static/images/`` for files named ``background.*``
-        and ``icon.*`` (common image extensions).  The resulting relative
-        paths (e.g. ``"images/background.jpg"``) are made available in every
-        template as ``bg_image`` and ``icon_image`` respectively.  Either
-        value is ``None`` when no matching file is found.
+        Injects the following into every template:
+
+        * ``app_title`` — short title for header and browser tab
+        * ``library_name`` — full organisation name
+        * ``library_branch`` — branch name
+        * ``library_phone`` — contact phone (empty string if unset)
+        * ``library_email`` — contact email (empty string if unset)
+        * ``library_address`` — street address (empty string if unset)
+        * ``library_hours`` — opening hours (empty string if unset)
+        * ``bg_image`` — relative path to background image, or ``None``
+        * ``icon_image`` — relative path to icon image, or ``None``
         """
         bg_image: str | None = None
         icon_image: str | None = None
@@ -73,7 +93,17 @@ def create_app(config_name: str | None = None) -> Flask:
                 if (images_dir / f"icon.{ext}").exists():
                     icon_image = f"images/icon.{ext}"
                     break
-        return {"bg_image": bg_image, "icon_image": icon_image}
+        return {
+            "app_title": app.config["APP_TITLE"],
+            "library_name": app.config["LIBRARY_NAME"],
+            "library_branch": app.config["LIBRARY_BRANCH"],
+            "library_phone": app.config["LIBRARY_PHONE"],
+            "library_email": app.config["LIBRARY_EMAIL"],
+            "library_address": app.config["LIBRARY_ADDRESS"],
+            "library_hours": app.config["LIBRARY_HOURS"],
+            "bg_image": bg_image,
+            "icon_image": icon_image,
+        }
 
     # Register blueprints (added in batch 3)
     try:

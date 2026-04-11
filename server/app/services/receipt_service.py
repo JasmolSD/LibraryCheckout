@@ -19,10 +19,10 @@ def build_receipt_pdf(patron: Patron, items: list[Checkout]) -> bytes:
     y = height - 60
 
     c.setFont("Helvetica-Bold", 16)
-    c.drawCentredString(width / 2, y, "Fresno County Public Library")
+    c.drawCentredString(width / 2, y, current_app.config["LIBRARY_NAME"])
     y -= 20
     c.setFont("Helvetica", 11)
-    c.drawCentredString(width / 2, y, "Temporary Checkout Receipt")
+    c.drawCentredString(width / 2, y, "Checkout Receipt")
     y -= 16
     c.drawCentredString(width / 2, y, current_app.config["LIBRARY_BRANCH"])
     y -= 14

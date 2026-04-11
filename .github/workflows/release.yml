@@ -1,0 +1,42 @@
+name: Release — Windows Executable
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-windows:
+    name: Build LibraryCheckout.exe
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install all dependencies
+        run: uv sync --group desktop --group dev
+
+      - name: Build standalone executable
+        run: >
+          uv run pyinstaller
+          --windowed
+          --onefile
+          --name LibraryCheckout
+          --collect-all pywebview
+          --collect-all clr_loader
+          --hidden-import pythoncom
+          --hidden-import pywintypes
+          --add-data "client;client"
+          --add-data "server;server"
+          run.py
+
+      - name: Upload executable to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/LibraryCheckout.exe
