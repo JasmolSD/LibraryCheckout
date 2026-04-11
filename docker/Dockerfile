@@ -17,8 +17,8 @@ COPY pyproject.toml ./
 COPY server ./server
 COPY client ./client
 
-# Install dependencies (no dev group; pywebview lives in the desktop group, not installed here)
-RUN uv sync --no-dev
+# Install dependencies only — skip building the local package (source is already copied)
+RUN uv sync --no-dev --no-install-project
 
 # Pre-create runtime dirs
 RUN mkdir -p /app/data /app/logs
