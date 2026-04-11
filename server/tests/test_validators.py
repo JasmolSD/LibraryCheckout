@@ -15,12 +15,20 @@ class TestBarcode:
     def test_accepts_10_digits(self):
         assert validate_barcode("1234567890") == "1234567890"
 
+    def test_accepts_13_digits(self):
+        # ISBN-13 is a valid barcode length
+        assert validate_barcode("9780451524935") == "9780451524935"
+
     def test_accepts_14_digits(self):
         assert validate_barcode("12345678901234") == "12345678901234"
 
     def test_rejects_wrong_length(self):
         with pytest.raises(ValidationError):
             validate_barcode("123")
+
+    def test_rejects_12_digits(self):
+        with pytest.raises(ValidationError):
+            validate_barcode("123456789012")
 
     def test_rejects_non_digits(self):
         with pytest.raises(ValidationError):
@@ -67,7 +75,26 @@ class TestName:
             normalize_name("")
 
 
-def test_card_uses_same_rules():
-    assert validate_card("1234567890") == "1234567890"
-    with pytest.raises(ValidationError):
-        validate_card("12345")
+class TestCard:
+    def test_accepts_10_digits(self):
+        assert validate_card("1234567890") == "1234567890"
+
+    def test_accepts_14_digits(self):
+        assert validate_card("12345678901234") == "12345678901234"
+
+    def test_rejects_13_digits(self):
+        # 13-digit ISBNs are valid barcodes but NOT valid card numbers
+        with pytest.raises(ValidationError):
+            validate_card("9780451524935")
+
+    def test_rejects_wrong_length(self):
+        with pytest.raises(ValidationError):
+            validate_card("12345")
+
+    def test_rejects_non_digits(self):
+        with pytest.raises(ValidationError):
+            validate_card("123456789X")
+
+    def test_rejects_none(self):
+        with pytest.raises(ValidationError):
+            validate_card(None)
