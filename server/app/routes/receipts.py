@@ -5,7 +5,7 @@ Blueprinted under ``/api/receipts``.
 
 from flask import Blueprint, Response, current_app, jsonify
 
-from ..models import Patron
+from ..models import Checkout, Patron
 from ..services.receipt_service import build_receipt_pdf
 from ..services.validators import ValidationError, validate_card
 
@@ -33,7 +33,11 @@ def receipt_for_active(card):
     if not patron:
         return jsonify({"error": "Patron not found"}), 404
 
-    active = [c for c in patron.checkouts.filter_by(action="checkout").all() if c.is_active]
+    active = [
+        c
+        for c in Checkout.query.filter_by(patron_id=patron.id, action="checkout").all()
+        if c.is_active
+    ]
     if not active:
         return jsonify({"error": "No active checkouts to print"}), 400
 

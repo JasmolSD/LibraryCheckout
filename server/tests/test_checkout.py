@@ -41,6 +41,8 @@ def test_renew_extends_due_date(app, patron):
     co = checkout_service.checkout_item(card="1234567890", barcode="9999999999")
     original_due = co.due_date
     renewed = checkout_service.renew_item("9999999999", loan_days=21)
+    assert original_due is not None
+    assert renewed.due_date is not None
     assert renewed.due_date > original_due
 
 

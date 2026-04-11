@@ -1,9 +1,9 @@
 """Tests for GET /api/stats and GET /api/checkouts/overdue."""
 
 from datetime import UTC, datetime, timedelta
+
 from server.app.database import db
 from server.app.models import Checkout
-
 
 # ── GET /api/stats ────────────────────────────────────────────────────────────
 
@@ -109,6 +109,7 @@ class TestStats:
         )
         # Force the due_date into the past
         co = Checkout.query.filter_by(action="checkout").first()
+        assert co is not None
         co.due_date = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=3)
         db.session.commit()
 
@@ -149,6 +150,7 @@ class TestOverdue:
             },
         )
         co = Checkout.query.filter_by(action="checkout").first()
+        assert co is not None
         co.due_date = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
         db.session.commit()
 
@@ -170,6 +172,7 @@ class TestOverdue:
             },
         )
         co = Checkout.query.filter_by(action="checkout").first()
+        assert co is not None
         co.due_date = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=5)
         db.session.commit()
 
@@ -216,6 +219,7 @@ class TestOverdue:
             },
         )
         co = Checkout.query.filter_by(action="checkout").first()
+        assert co is not None
         co.due_date = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=1)
         db.session.commit()
 

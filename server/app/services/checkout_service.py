@@ -423,9 +423,12 @@ def patron_summary(card: str) -> dict:
     if not patron:
         raise ValidationError("Patron not found")
 
-    all_checkouts = patron.checkouts.filter_by(action="checkout").all()
+    all_checkouts = Checkout.query.filter_by(patron_id=patron.id, action="checkout").all()
     active = [c for c in all_checkouts if c.is_active]
     late = [c for c in active if c.is_late]
+    history = (
+        Checkout.query.filter_by(patron_id=patron.id).order_by(Checkout.checked_out_at.desc()).all()
+    )
 
     return {
         "patron": patron.to_dict(),
@@ -434,7 +437,5 @@ def patron_summary(card: str) -> dict:
         "currently_out": len(active),
         "late_count": len(late),
         "active_items": [c.to_dict() for c in active],
-        "history": [
-            c.to_dict() for c in patron.checkouts.order_by(Checkout.checked_out_at.desc()).all()
-        ],
+        "history": [c.to_dict() for c in history],
     }

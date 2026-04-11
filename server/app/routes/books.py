@@ -17,10 +17,10 @@ from ..services.validators import ValidationError
 bp = Blueprint("books", __name__, url_prefix="/api/books")
 
 _CATEGORY_KEYWORDS: dict[str, list[str]] = {
-    "dvd":       ["dvd", "video", "film", "movie", "motion picture"],
+    "dvd": ["dvd", "video", "film", "movie", "motion picture"],
     "audiobook": ["audio", "spoken word", "sound recording"],
-    "magazine":  ["magazine", "periodical", "journal", "serial"],
-    "ebook":     ["electronic", "ebook", "e-book", "digital"],
+    "magazine": ["magazine", "periodical", "journal", "serial"],
+    "ebook": ["electronic", "ebook", "e-book", "digital"],
 }
 
 

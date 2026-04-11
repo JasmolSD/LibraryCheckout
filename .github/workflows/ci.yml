@@ -33,6 +33,9 @@ jobs:
       - name: Black format check
         run: uv run black --check .
 
+      - name: Pyright type check
+        run: uv run pyright server/
+
   test:
     name: Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest

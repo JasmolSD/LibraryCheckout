@@ -2,9 +2,21 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING
 
-from .database import db
+from sqlalchemy import ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from .database import Base, db
+
+# At type-check time extend the typed DeclarativeBase so pyright can infer
+# constructor signatures from Mapped[T] fields.  At runtime extend db.Model
+# so Flask-SQLAlchemy's session, query proxy, and table registration all work.
+if TYPE_CHECKING:
+    _Base = Base
+else:
+    _Base = db.Model
 
 
 def _utcnow() -> datetime:
@@ -12,21 +24,21 @@ def _utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-class Patron(db.Model):
+class Patron(_Base):
     __tablename__ = "patrons"
 
-    id = db.Column(db.Integer, primary_key=True)
-    card_number = db.Column(db.String(14), unique=True, nullable=False, index=True)
-    last_name = db.Column(db.String(60), nullable=False)
-    first_name = db.Column(db.String(60), nullable=False)
-    middle_name = db.Column(db.String(60), nullable=True)
-    birth_date = db.Column(db.Date, nullable=False)
-    email = db.Column(db.String(120), nullable=True)
-    phone = db.Column(db.String(20), nullable=True)
-    created_at = db.Column(db.DateTime, default=_utcnow, nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    card_number: Mapped[str] = mapped_column(String(14), unique=True, index=True)
+    last_name: Mapped[str] = mapped_column(String(60))
+    first_name: Mapped[str] = mapped_column(String(60))
+    middle_name: Mapped[str | None] = mapped_column(String(60))
+    birth_date: Mapped[date] = mapped_column()
+    email: Mapped[str | None] = mapped_column(String(120))
+    phone: Mapped[str | None] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
 
-    checkouts = db.relationship(
-        "Checkout", backref="patron", lazy="dynamic", cascade="all, delete-orphan"
+    checkouts: Mapped[list[Checkout]] = relationship(
+        back_populates="patron", cascade="all, delete-orphan"
     )
 
     @property
@@ -54,18 +66,18 @@ class Patron(db.Model):
         }
 
 
-class Book(db.Model):
+class Book(_Base):
     __tablename__ = "books"
 
-    id = db.Column(db.Integer, primary_key=True)
-    barcode = db.Column(db.String(14), unique=True, nullable=False, index=True)
-    title = db.Column(db.String(200), nullable=True)
-    author = db.Column(db.String(120), nullable=True)
-    category = db.Column(db.String(40), default="book", nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    barcode: Mapped[str] = mapped_column(String(14), unique=True, index=True)
+    title: Mapped[str | None] = mapped_column(String(200))
+    author: Mapped[str | None] = mapped_column(String(120))
     # categories: book, dvd, audiobook, magazine, ebook, other
-    created_at = db.Column(db.DateTime, default=_utcnow, nullable=False)
+    category: Mapped[str] = mapped_column(String(40), default="book")
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
 
-    checkouts = db.relationship("Checkout", backref="book", lazy="dynamic")
+    checkouts: Mapped[list[Checkout]] = relationship(back_populates="book")
 
     def to_dict(self) -> dict:
         return {
@@ -77,21 +89,24 @@ class Book(db.Model):
         }
 
 
-class Checkout(db.Model):
+class Checkout(_Base):
     __tablename__ = "checkouts"
 
-    id = db.Column(db.Integer, primary_key=True)
-    patron_id = db.Column(db.Integer, db.ForeignKey("patrons.id"), nullable=False, index=True)
-    book_id = db.Column(db.Integer, db.ForeignKey("books.id"), nullable=False, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patron_id: Mapped[int] = mapped_column(ForeignKey("patrons.id"), index=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id"), index=True)
 
     # action: checkout | return | renew
-    action = db.Column(db.String(20), default="checkout", nullable=False)
+    action: Mapped[str] = mapped_column(String(20), default="checkout")
     # Total loan duration in days (0 for return audit rows)
-    loan_days = db.Column(db.Integer, default=14, nullable=False)
+    loan_days: Mapped[int] = mapped_column(default=14)
 
-    checked_out_at = db.Column(db.DateTime, default=_utcnow, nullable=False)
-    due_date = db.Column(db.DateTime, nullable=True)
-    returned_at = db.Column(db.DateTime, nullable=True)
+    checked_out_at: Mapped[datetime] = mapped_column(default=_utcnow)
+    due_date: Mapped[datetime | None] = mapped_column()
+    returned_at: Mapped[datetime | None] = mapped_column()
+
+    patron: Mapped[Patron] = relationship(back_populates="checkouts")
+    book: Mapped[Book] = relationship(back_populates="checkouts")
 
     @property
     def is_active(self) -> bool:

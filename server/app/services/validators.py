@@ -8,8 +8,8 @@ values directly without pre-checking for ``None``.
 
 from __future__ import annotations
 
-VALID_LENGTHS = (10, 13, 14)      # 13 = ISBN-13; 10 = ISBN-10 / legacy; 14 = EAN-14
-VALID_CARD_LENGTHS = (10, 14)     # library card numbers never use ISBN-13 length
+VALID_LENGTHS = (10, 13, 14)  # 13 = ISBN-13; 10 = ISBN-10 / legacy; 14 = EAN-14
+VALID_CARD_LENGTHS = (10, 14)  # library card numbers never use ISBN-13 length
 
 
 class ValidationError(ValueError):

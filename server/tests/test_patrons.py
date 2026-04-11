@@ -26,7 +26,12 @@ def test_create_patron(client):
 def test_create_patron_invalid_card(client):
     r = client.post(
         "/api/patrons/",
-        json={"card_number": "abc", "first_name": "X", "last_name": "Y", "birth_date": "1990-01-01"},
+        json={
+            "card_number": "abc",
+            "first_name": "X",
+            "last_name": "Y",
+            "birth_date": "1990-01-01",
+        },
     )
     assert r.status_code == 400
 
