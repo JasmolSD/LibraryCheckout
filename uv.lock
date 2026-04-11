@@ -448,11 +448,13 @@ dependencies = [
     { name = "flask-sqlalchemy" },
     { name = "python-dateutil" },
     { name = "python-dotenv" },
-    { name = "pywebview" },
     { name = "reportlab" },
 ]
 
 [package.dev-dependencies]
+desktop = [
+    { name = "pywebview" },
+]
 dev = [
     { name = "black" },
     { name = "pyinstaller" },
@@ -469,11 +471,11 @@ requires-dist = [
     { name = "flask-sqlalchemy", specifier = ">=3.1.0" },
     { name = "python-dateutil", specifier = ">=2.9.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
-    { name = "pywebview", specifier = ">=5.0.0" },
     { name = "reportlab", specifier = ">=4.0.0" },
 ]
 
 [package.metadata.requires-dev]
+desktop = [{ name = "pywebview", specifier = ">=5.0.0" }]
 dev = [
     { name = "black", specifier = ">=24.0.0" },
     { name = "pyinstaller", specifier = ">=6.0.0" },

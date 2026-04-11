@@ -46,8 +46,8 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```bash
 git clone <your-repo> library-checkout
 cd library-checkout
-uv python install 3.12   # downloads Python 3.12 if needed
-uv sync                  # creates .venv and installs all deps
+uv python install 3.12          # downloads Python 3.12 if needed
+uv sync --group desktop         # creates .venv and installs all deps including pywebview
 ```
 
 ### 3. Run the desktop app
@@ -121,6 +121,12 @@ Scan or type a prefix immediately before the barcode digits to override the defa
 | `3W` or none | 3 weeks (default) | `3W1234567890` or `1234567890` |
 
 ## Development
+
+First install dev dependencies (pywebview not needed for tests):
+
+```bash
+uv sync --group dev
+```
 
 ### Tests
 
