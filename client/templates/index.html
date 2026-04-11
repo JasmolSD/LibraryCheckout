@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block content %}
+<div x-data="checkoutApp()" x-init="init()" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- LEFT: Card lookup + summary -->
+    <section class="lg:col-span-1 space-y-4">
+        <div class="bg-white rounded-xl shadow p-5">
+            <h2 class="font-semibold mb-3">Library Card</h2>
+            <input x-model="cardInput" @keydown.enter="lookupPatron()" type="text" placeholder="Scan or enter card #"
+                autofocus class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500" />
+            <button @click="lookupPatron()"
+                class="mt-3 w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700">
+                Look Up
+            </button>
+        </div>
+
+        <template x-if="patron">
+            <div class="bg-white rounded-xl shadow p-5">
+                <h3 class="font-bold text-lg" x-text="patron.patron.name"></h3>
+                <p class="text-sm text-slate-500" x-text="patron.patron.card_masked"></p>
+                <div class="grid grid-cols-2 gap-3 mt-4 text-sm">
+                    <div class="bg-slate-50 p-3 rounded">
+                        <div class="text-slate-500">Account age</div>
+                        <div class="font-bold text-lg" x-text="patron.account_age_days + ' days'"></div>
+                    </div>
+                    <div class="bg-slate-50 p-3 rounded">
+                        <div class="text-slate-500">Total checkouts</div>
+                        <div class="font-bold text-lg" x-text="patron.total_checkouts"></div>
+                    </div>
+                    <div class="bg-emerald-50 p-3 rounded">
+                        <div class="text-emerald-700">Currently out</div>
+                        <div class="font-bold text-lg text-emerald-800" x-text="patron.currently_out"></div>
+                    </div>
+                    <div class="bg-rose-50 p-3 rounded">
+                        <div class="text-rose-700">Late items</div>
+                        <div class="font-bold text-lg text-rose-800" x-text="patron.late_count"></div>
+                    </div>
+                </div>
+                <a :href="'/history?card=' + patron.patron.card_number"
+                    class="mt-4 inline-block text-indigo-600 text-sm hover:underline">
+                    View full history →
+                </a>
+            </div>
+        </template>
+    </section>
+
+    <!-- RIGHT: Action panel -->
+    <section class="lg:col-span-2 space-y-4">
+        <div class="bg-white rounded-xl shadow p-5">
+            <div class="flex gap-2 mb-4">
+                <template x-for="a in ['checkout','return','renew']" :key="a">
+                    <button @click="action = a" :class="action === a ? 'bg-indigo-600 text-white' : 'bg-slate-100'"
+                        class="px-4 py-2 rounded-lg capitalize" x-text="a"></button>
+                </template>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <input x-model="itemInput" @keydown.enter="submitAction()" type="text"
+                    placeholder="Scan barcode (prefix 2W/3W for weeks)"
+                    class="border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500" />
+                <select x-model="category" class="border rounded-lg px-3 py-2">
+                    <option value="book">Book</option>
+                    <option value="dvd">DVD</option>
+                    <option value="audiobook">Audiobook</option>
+                    <option value="magazine">Magazine</option>
+                    <option value="ebook">eBook</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <button @click="submitAction()"
+                class="mt-3 w-full bg-emerald-600 text-white py-2 rounded-lg hover:bg-emerald-700">
+                Submit
+            </button>
+
+            <p x-show="message" x-text="message" :class="error ? 'text-rose-600' : 'text-emerald-600'"
+                class="mt-3 text-sm"></p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-5" x-show="patron && patron.active_items.length">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="font-semibold">Currently Checked Out</h3>
+                <button @click="printReceipt()"
+                    class="text-sm bg-slate-800 text-white px-3 py-1 rounded hover:bg-slate-900">
+                    🖨️ Print Receipt
+                </button>
+            </div>
+            <table class="w-full text-sm">
+                <thead class="text-left text-slate-500 border-b">
+                    <tr>
+                        <th class="py-2">Barcode</th>
+                        <th>Category</th>
+                        <th>Due</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="item in (patron ? patron.active_items : [])" :key="item.id">
+                        <tr class="border-b last:border-0">
+                            <td class="py-2 font-mono" x-text="item.barcode"></td>
+                            <td x-text="item.category"></td>
+                            <td :class="item.is_late ? 'text-rose-600 font-bold' : ''"
+                                x-text="item.due_date ? item.due_date.slice(0,10) : '—'"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% endblock %}

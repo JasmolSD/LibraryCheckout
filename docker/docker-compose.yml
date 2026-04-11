@@ -1,0 +1,23 @@
+services:
+  library-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: library-checkout:latest
+    container_name: library-checkout
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+    environment:
+      FLASK_ENV: production
+      LIBRARY_BRANCH: "Fresno Central Library"
+      LIBRARY_PHONE: "(559) 600-7323"
+      LOG_LEVEL: INFO
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3

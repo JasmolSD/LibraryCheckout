@@ -1,0 +1,43 @@
+/* Custom overrides on top of Tailwind CDN */
+
+/* Smooth focus rings */
+input:focus,
+select:focus,
+button:focus {
+    outline: none;
+}
+
+/* Larger tap targets for desktop scanner workflow */
+input[type="text"],
+select {
+    font-size: 1rem;
+    min-height: 2.75rem;
+}
+
+/* Print-friendly receipts */
+@media print {
+
+    header,
+    nav,
+    button {
+        display: none !important;
+    }
+
+    body {
+        background: white;
+    }
+
+    .shadow {
+        box-shadow: none !important;
+    }
+}
+
+/* Subtle row hover for tables */
+tbody tr:hover {
+    background-color: rgb(248 250 252);
+}
+
+/* Animated flash messages */
+[x-show] {
+    transition: opacity 0.2s ease-in-out;
+}

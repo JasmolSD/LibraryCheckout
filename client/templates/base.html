@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Library Checkout{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+    <header class="bg-indigo-700 text-white shadow">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold">📚 Library Checkout</h1>
+                <p class="text-indigo-200 text-sm">Fresno County Public Library</p>
+            </div>
+            <nav class="space-x-4 text-sm">
+                <a href="/" class="hover:underline">Checkout</a>
+                <a href="/history" class="hover:underline">History</a>
+            </nav>
+        </div>
+    </header>
+    <main class="max-w-6xl mx-auto px-6 py-8">
+        {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>

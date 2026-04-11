@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<div x-data="historyApp()" x-init="init()">
+    <div class="bg-white rounded-xl shadow p-5 mb-4">
+        <h2 class="font-semibold mb-3">Patron History</h2>
+        <div class="flex gap-2">
+            <input x-model="card" @keydown.enter="load()" type="text" placeholder="Library card #"
+                class="flex-1 border rounded-lg px-3 py-2" />
+            <button @click="load()" class="bg-indigo-600 text-white px-4 rounded-lg hover:bg-indigo-700">Load</button>
+        </div>
+    </div>
+
+    <template x-if="data">
+        <div class="bg-white rounded-xl shadow p-5">
+            <h3 class="text-xl font-bold" x-text="data.patron.name"></h3>
+            <p class="text-slate-500" x-text="data.patron.card_masked"></p>
+            <table class="w-full text-sm mt-4">
+                <thead class="text-left bg-slate-100">
+                    <tr>
+                        <th class="p-2">Date</th>
+                        <th>Action</th>
+                        <th>Barcode</th>
+                        <th>Category</th>
+                        <th>Due</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="row in data.history" :key="row.id">
+                        <tr class="border-b">
+                            <td class="p-2" x-text="row.checked_out_at.slice(0,10)"></td>
+                            <td><span :class="badgeClass(row.action)" class="px-2 py-1 rounded text-xs uppercase"
+                                    x-text="row.action"></span></td>
+                            <td class="font-mono" x-text="row.barcode"></td>
+                            <td x-text="row.category"></td>
+                            <td :class="row.is_late ? 'text-rose-600 font-bold' : ''"
+                                x-text="row.due_date ? row.due_date.slice(0,10) : '—'"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </template>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/patron.js') }}"></script>
+{% endblock %}
