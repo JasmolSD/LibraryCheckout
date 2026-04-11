@@ -33,11 +33,7 @@ def receipt_for_active(card):
     if not patron:
         return jsonify({"error": "Patron not found"}), 404
 
-    active = [
-        ln
-        for ln in Loan.query.filter_by(patron_id=patron.id).all()
-        if ln.is_active
-    ]
+    active = [ln for ln in Loan.query.filter_by(patron_id=patron.id).all() if ln.is_active]
     if not active:
         return jsonify({"error": "No active checkouts to print"}), 400
 

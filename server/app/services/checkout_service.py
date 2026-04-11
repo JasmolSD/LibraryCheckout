@@ -160,9 +160,7 @@ def checkout_item(
     barcode = validate_barcode(barcode)
 
     book = get_or_create_book(barcode, title=title, category=category)
-    existing = Loan.query.filter_by(
-        book_id=book.id, returned_at=None
-    ).first()
+    existing = Loan.query.filter_by(book_id=book.id, returned_at=None).first()
     if existing:
         raise ValidationError(f"Item {barcode} is already checked out")
 
@@ -247,9 +245,7 @@ def library_stats() -> dict:
     total_patrons = Patron.query.count()
     total_books = Book.query.count()
 
-    active_checkouts = Loan.query.filter(
-        Loan.returned_at.is_(None)
-    ).count()
+    active_checkouts = Loan.query.filter(Loan.returned_at.is_(None)).count()
 
     overdue_count = Loan.query.filter(
         Loan.returned_at.is_(None),

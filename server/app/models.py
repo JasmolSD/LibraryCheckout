@@ -37,9 +37,7 @@ class Patron(_Base):
     phone: Mapped[str | None] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
 
-    loans: Mapped[list[Loan]] = relationship(
-        back_populates="patron", cascade="all, delete-orphan"
-    )
+    loans: Mapped[list[Loan]] = relationship(back_populates="patron", cascade="all, delete-orphan")
 
     @property
     def name(self) -> str:
@@ -156,7 +154,11 @@ class Transaction(_Base):
             "title": self.loan.book.title if self.loan and self.loan.book else None,
             "category": self.loan.book.category if self.loan and self.loan.book else None,
             "checked_out_at": self.loan.checked_out_at.isoformat() if self.loan else None,
-            "due_date": self.loan.due_date.isoformat() if self.loan and self.loan.due_date else None,
-            "returned_at": self.loan.returned_at.isoformat() if self.loan and self.loan.returned_at else None,
+            "due_date": (
+                self.loan.due_date.isoformat() if self.loan and self.loan.due_date else None
+            ),
+            "returned_at": (
+                self.loan.returned_at.isoformat() if self.loan and self.loan.returned_at else None
+            ),
             "is_late": self.loan.is_late if self.loan else False,
         }
