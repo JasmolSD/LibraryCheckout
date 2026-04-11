@@ -3,6 +3,7 @@
  *
  * Loads a patron's full transaction history from the API and provides
  * filtering by action type (checkout / return / renew).
+ * Also supports searching patrons by first or last name.
  *
  * Mounted via x-data="historyApp()" on the page root element in history.html.
  * Auto-loads if a `?card=` query-string parameter is present in the URL
@@ -27,10 +28,20 @@ function historyApp() {
         data: null,
         /** Active filter: 'all' | 'checkout' | 'return' | 'renew'. */
         filter: 'all',
-        /** True while the API request is in flight. */
+        /** True while the card-lookup API request is in flight. */
         loading: false,
         /** Non-empty string when a load error has occurred (displayed inline). */
         errMsg: '',
+
+        // ── Name search state ─────────────────────────────────────
+        /** Current value of the name search input. */
+        nameQuery: '',
+        /** Results from GET /api/patrons/search. */
+        nameResults: [],
+        /** True while the name-search request is in flight. */
+        nameSearching: false,
+        /** True after at least one name search has been attempted. */
+        nameSearched: false,
 
         // ── Lifecycle ────────────────────────────────────────────
 
@@ -48,7 +59,7 @@ function historyApp() {
             }
         },
 
-        // ── Data loading ──────────────────────────────────────────
+        // ── Card-based data loading ───────────────────────────────
 
         /**
          * Fetch patron summary and transaction history from the API.
@@ -61,8 +72,10 @@ function historyApp() {
             this.loading = true;
             this.errMsg = '';
             this.data = null;
+            this.nameResults = [];
+            this.nameSearched = false;
             try {
-                const r = await fetch(`/api/patrons/${this.card.trim()}`);
+                const r = await fetch(`/api/patrons/${encodeURIComponent(this.card.trim())}`);
                 if (!r.ok) {
                     const e = await r.json();
                     this.errMsg = e.error || 'Patron not found';
@@ -75,6 +88,52 @@ function historyApp() {
             } finally {
                 this.loading = false;
             }
+        },
+
+        // ── Name search ───────────────────────────────────────────
+
+        /**
+         * Search for patrons by first or last name via GET /api/patrons/search.
+         * Populates nameResults with the response.
+         *
+         * @returns {Promise<void>}
+         */
+        async searchByName() {
+            const q = this.nameQuery.trim();
+            if (!q) return;
+            this.nameSearching = true;
+            this.nameResults = [];
+            this.nameSearched = false;
+            this.data = null;
+            this.errMsg = '';
+            try {
+                const r = await fetch(`/api/patrons/search?q=${encodeURIComponent(q)}`);
+                const body = await r.json();
+                if (!r.ok) {
+                    this.errMsg = body.error || 'Search failed';
+                    return;
+                }
+                this.nameResults = body;
+                this.nameSearched = true;
+            } catch (e) {
+                this.errMsg = e.message;
+            } finally {
+                this.nameSearching = false;
+            }
+        },
+
+        /**
+         * Select a patron from the name-search results, load their history,
+         * and clear the search results.
+         *
+         * @param {object} patron - Patron object from the search results.
+         */
+        selectPatron(patron) {
+            this.card = patron.card_number;
+            this.nameQuery = '';
+            this.nameResults = [];
+            this.nameSearched = false;
+            this.load();
         },
 
         // ── Filtering ─────────────────────────────────────────────

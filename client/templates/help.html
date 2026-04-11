@@ -42,10 +42,9 @@
                         flex items-center justify-center mb-4">2</div>
             <h3 class="font-semibold text-slate-800 mb-2">Scan the Item Barcode</h3>
             <p class="text-slate-500 text-sm leading-relaxed">
-                Scan the item barcode in the action panel. Add a week prefix
-                (<code class="bg-slate-100 text-slate-700 px-1 rounded font-mono text-xs">2W</code>,
-                <code class="bg-slate-100 text-slate-700 px-1 rounded font-mono text-xs">3W</code>)
-                before the barcode to override the default 3-week loan period.
+                Scan the item barcode in the action panel, then choose the loan period
+                (1, 2, or 3 weeks) from the <strong>Loan period</strong> selector.
+                The default is <strong>2 weeks</strong>.
             </p>
         </div>
 
@@ -62,61 +61,49 @@
     </div>
 </section>
 
-<!-- ── Barcode prefixes + Actions ───────────────────────────── -->
+<!-- ── Loan period + Actions ──────────────────────────────── -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
 
-    <!-- Barcode prefix table -->
+    <!-- Loan period -->
     <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5">
         <div class="flex items-center gap-2 mb-4">
             <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
                 <svg class="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round"
-                          d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125
-                             1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0
-                             013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621
-                             0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125
-                             1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5
-                             4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125
-                             1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0
-                             0113.5 9.375v-4.5z"/>
+                          d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25
+                             2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0
+                             0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0
+                             0121 11.25v7.5"/>
                 </svg>
             </div>
-            <h2 class="font-semibold text-slate-800">Barcode Week Prefixes</h2>
+            <h2 class="font-semibold text-slate-800">Loan Period</h2>
         </div>
         <p class="text-slate-500 text-sm mb-4 leading-relaxed">
-            Type or scan the prefix immediately before the barcode digits to override the
-            default 3-week checkout period. The prefix is case-insensitive.
+            Use the <strong>Loan period</strong> selector when checking out or renewing an item.
+            The selected period applies to the next action — change it before submitting.
         </p>
         <table class="w-full text-sm">
             <thead>
                 <tr class="text-xs text-slate-500 uppercase tracking-wider border-b border-slate-100">
-                    <th class="pb-2 text-left font-medium">Prefix</th>
-                    <th class="pb-2 text-left font-medium">Loan Period</th>
-                    <th class="pb-2 text-left font-medium">Example Input</th>
+                    <th class="pb-2 text-left font-medium">Option</th>
+                    <th class="pb-2 text-left font-medium">Due date</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-50">
                 <tr>
-                    <td class="py-2.5">
-                        <code class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono text-xs">1W</code>
-                    </td>
                     <td class="py-2.5 text-slate-700">1 week</td>
-                    <td class="py-2.5 font-mono text-xs text-slate-400">1W1234567890</td>
+                    <td class="py-2.5 text-slate-500 text-xs">Today + 7 days</td>
                 </tr>
                 <tr>
-                    <td class="py-2.5">
-                        <code class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono text-xs">2W</code>
+                    <td class="py-2.5 font-medium text-slate-800">
+                        2 weeks
+                        <span class="ml-1.5 bg-emerald-100 text-emerald-700 text-xs px-1.5 py-0.5 rounded-full font-normal">default</span>
                     </td>
-                    <td class="py-2.5 text-slate-700">2 weeks</td>
-                    <td class="py-2.5 font-mono text-xs text-slate-400">2W1234567890</td>
+                    <td class="py-2.5 text-slate-500 text-xs">Today + 14 days</td>
                 </tr>
                 <tr>
-                    <td class="py-2.5">
-                        <code class="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-mono text-xs">3W</code>
-                        <span class="ml-1 text-xs text-slate-400 font-sans">default</span>
-                    </td>
                     <td class="py-2.5 text-slate-700">3 weeks</td>
-                    <td class="py-2.5 font-mono text-xs text-slate-400">3W1234567890 or just 1234567890</td>
+                    <td class="py-2.5 text-slate-500 text-xs">Today + 21 days</td>
                 </tr>
             </tbody>
         </table>
@@ -140,8 +127,8 @@
                 <div>
                     <h4 class="font-semibold text-emerald-800 text-sm">Checkout</h4>
                     <p class="text-emerald-700 text-xs mt-0.5 leading-relaxed">
-                        Loans an item to the patron. Creates a record with a calculated due date based on the
-                        week prefix (default 3 weeks from today).
+                        Loans an item to the patron. The due date is calculated from the
+                        <strong>Loan period</strong> selector (default 2 weeks from today).
                     </p>
                 </div>
             </div>
@@ -160,8 +147,8 @@
                 <div>
                     <h4 class="font-semibold text-amber-800 text-sm">Renew</h4>
                     <p class="text-amber-700 text-xs mt-0.5 leading-relaxed">
-                        Extends the due date from <em>today</em>. Use week prefixes (1W / 2W / 3W) before
-                        the barcode to set the new renewal period.
+                        Extends the due date from <em>today</em>. Set the <strong>Loan period</strong>
+                        before scanning to choose how many weeks the renewal adds.
                     </p>
                 </div>
             </div>
@@ -322,15 +309,15 @@
 
     <details class="faq-item">
         <summary>
-            How do I renew for 1 or 2 weeks instead of 3?
+            How do I choose a different loan period?
             <svg class="faq-chevron w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
             </svg>
         </summary>
         <div class="faq-answer">
-            Switch to the <strong>Renew</strong> tab and prefix the barcode when scanning. For example,
-            scan or type <code class="bg-slate-100 px-1 rounded font-mono text-xs">2W1234567890</code>
-            to renew for 2 weeks from today.
+            Use the <strong>Loan period</strong> dropdown that appears under the barcode field when the
+            Checkout or Renew tab is active. Select 1, 2, or 3 weeks before submitting. The selection
+            persists between scans so you only need to change it when the period changes.
         </div>
     </details>
 

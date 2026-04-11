@@ -6,7 +6,7 @@ Ported from a legacy Excel/VBA workflow to a modern Flask + pywebview stack.
 ## Features
 
 - **Library card scanning** — look up patrons instantly; new-patron registration via inline modal (no `prompt()`)
-- **Barcode scanning with week prefixes** — `1W`, `2W`, `3W` before the barcode overrides the default 3-week loan period
+- **Loan period selector** — choose 1, 2, or 3 weeks per checkout or renewal; defaults to 2 weeks
 - **Checkout / Return / Renew** — colour-coded action tabs with loading states and toast notifications
 - **PDF receipt generation** — ReportLab-based receipt printed directly from the browser
 - **Patron history viewer** — full transaction log with filter tabs (All / Checkouts / Returns / Renewals)
@@ -110,15 +110,11 @@ Drop files into **`client/static/images/`** and restart the server — no code c
 | `background.jpg` (or `.png`, `.webp`, `.gif`) | Full-page background image shown at ~20% opacity behind a white overlay |
 | `icon.png` (or `.svg`, `.ico`, `.jpg`) | Replaces the default book SVG in the header and browser tab favicon |
 
-## Barcode Week Prefixes
+## Loan Period
 
-Scan or type a prefix immediately before the barcode digits to override the default 3-week loan:
-
-| Prefix | Period | Example |
-|---|---|---|
-| `1W` | 1 week | `1W1234567890` |
-| `2W` | 2 weeks | `2W1234567890` |
-| `3W` or none | 3 weeks (default) | `3W1234567890` or `1234567890` |
+A **Loan period** dropdown appears under the barcode field when the Checkout or Renew tab is active.
+Select 1, 2, or 3 weeks before submitting. The default is **2 weeks**.
+The selection persists between scans so it only needs to be changed when the period changes.
 
 ## Development
 

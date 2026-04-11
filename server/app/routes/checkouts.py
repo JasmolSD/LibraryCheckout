@@ -17,10 +17,10 @@ def checkout():
 
     Request body (JSON):
         card_number (str): Patron's library card number.
-        barcode (str): Item barcode, optionally prefixed with "1W", "2W", or "3W"
-            to override the default 3-week loan period.
+        barcode (str): Item barcode.
+        loan_days (int, optional): Loan period in days (default 14).
         category (str, optional): Item category — one of book / dvd / audiobook /
-            magazine / ebook / other.  Defaults to "book".
+            magazine / ebook / other.  Defaults to ``"book"``.
         title (str, optional): Human-readable item title stored on first encounter.
 
     Returns:
@@ -30,9 +30,14 @@ def checkout():
     """
     data = request.get_json() or {}
     try:
+        loan_days = int(data.get("loan_days", 14))
+    except (ValueError, TypeError):
+        return jsonify({"error": "loan_days must be an integer"}), 400
+    try:
         co = checkout_service.checkout_item(
             card=data.get("card_number", ""),
-            item_input=data.get("barcode", ""),
+            barcode=data.get("barcode", ""),
+            loan_days=loan_days,
             category=data.get("category", "book"),
             title=data.get("title"),
         )
@@ -46,7 +51,7 @@ def return_item():
     """Mark a currently-checked-out item as returned.
 
     Request body (JSON):
-        barcode (str): Item barcode (prefix stripped automatically).
+        barcode (str): Item barcode.
 
     Returns:
         200 with the return :class:`Checkout` audit record as JSON on success.
@@ -65,8 +70,8 @@ def renew_item():
     """Extend the due date of a currently-checked-out item from today.
 
     Request body (JSON):
-        barcode (str): Item barcode (prefix stripped automatically).
-        weeks (int, optional): Number of weeks to add from today.  Defaults to 3.
+        barcode (str): Item barcode.
+        loan_days (int, optional): Number of days to extend from today.  Defaults to 14.
 
     Returns:
         200 with the updated :class:`Checkout` record as JSON on success.
@@ -75,11 +80,11 @@ def renew_item():
     """
     data = request.get_json() or {}
     try:
-        weeks = int(data.get("weeks", 3))
+        loan_days = int(data.get("loan_days", 14))
     except (ValueError, TypeError):
-        return jsonify({"error": "weeks must be an integer"}), 400
+        return jsonify({"error": "loan_days must be an integer"}), 400
     try:
-        co = checkout_service.renew_item(data.get("barcode", ""), weeks)
+        co = checkout_service.renew_item(data.get("barcode", ""), loan_days)
         return jsonify(co.to_dict())
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400

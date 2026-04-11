@@ -2,8 +2,9 @@
  * app.js — Main checkout screen Alpine.js component.
  *
  * Handles the full staff-facing checkout workflow:
- *   • Library-card lookup with automatic new-patron registration modal
+ *   • Library-card lookup (404 → link to /register page instead of inline modal)
  *   • Checkout / Return / Renew actions via REST API
+ *   • Custom loan period: preset (1/2/3 weeks) or custom number + unit (days/weeks/months)
  *   • Toast notification system (replaces alert / inline text)
  *   • Loading states on every async operation
  *
@@ -29,14 +30,22 @@ function checkoutApp() {
         action: 'checkout',
         /** Patron summary object returned by GET /api/patrons/:card, or null. */
         patron: null,
+        /** Card number that was looked up but not found (triggers register link). */
+        notFoundCard: '',
+
+        // ── Loan period state ────────────────────────────────────
+        /** Preset selection: '1' | '2' | '3' | 'custom'. */
+        loanPreset: '2',
+        /** Numeric value for custom loan period (1–9). */
+        customLoanValue: 1,
+        /** Unit for custom loan period: 'days' | 'weeks' | 'months'. */
+        customLoanUnit: 'weeks',
 
         // ── Loading flags ────────────────────────────────────────
         /** True while the patron-lookup request is in flight. */
         cardLoading: false,
         /** True while a checkout / return / renew request is in flight. */
         actionLoading: false,
-        /** True while the patron-registration POST is in flight. */
-        registerLoading: false,
 
         // ── Toast notifications ──────────────────────────────────
         /**
@@ -45,22 +54,13 @@ function checkoutApp() {
          */
         toasts: [],
 
-        // ── Registration modal ───────────────────────────────────
-        /** Whether the new-patron registration modal is visible. */
-        showModal: false,
-        /** Card number that triggered the "patron not found" path. */
-        pendingCard: '',
-        /** Name field value inside the registration modal. */
-        registerName: '',
-        /** Email field value inside the registration modal (optional). */
-        registerEmail: '',
-
         // ── Lifecycle ────────────────────────────────────────────
 
         /**
          * Alpine init hook.
          * Watches `patron` so the barcode field auto-focuses after a successful lookup.
          * Watches `action` so the barcode field auto-focuses when the tab changes.
+         * Auto-loads patron if a `?card=` URL parameter is present (e.g. after registration).
          */
         init() {
             this.$watch('patron', (p) => {
@@ -69,13 +69,20 @@ function checkoutApp() {
             this.$watch('action', () => {
                 this.$nextTick(() => document.getElementById('barcode-input')?.focus());
             });
+            // Auto-load from URL param (set by register page on success)
+            const params = new URLSearchParams(window.location.search);
+            const card = params.get('card');
+            if (card) {
+                this.cardInput = card;
+                this.lookupPatron();
+            }
         },
 
         // ── Patron lookup ─────────────────────────────────────────
 
         /**
          * Fetch patron summary by card number.
-         * On 404 opens the registration modal instead of calling prompt().
+         * On 404 sets notFoundCard to display the registration link instead of alert().
          *
          * @returns {Promise<void>}
          */
@@ -83,12 +90,14 @@ function checkoutApp() {
             const card = this.cardInput.trim();
             if (!card) return;
             this.cardLoading = true;
+            this.notFoundCard = '';
             try {
-                const r = await fetch(`/api/patrons/${card}`);
+                const r = await fetch(`/api/patrons/${encodeURIComponent(card)}`);
                 if (!r.ok) {
                     const err = await r.json();
                     if (r.status === 404) {
-                        this.openRegisterModal(card);
+                        this.notFoundCard = card;
+                        this.patron = null;
                         return;
                     }
                     this.toast(err.error || 'Lookup failed', 'error');
@@ -102,55 +111,22 @@ function checkoutApp() {
             }
         },
 
-        // ── Registration modal ────────────────────────────────────
+        // ── Loan period ───────────────────────────────────────────
 
         /**
-         * Open the new-patron registration modal for the given card number.
-         * Focuses the name field after the modal becomes visible.
+         * Compute the loan duration in days from the current preset/custom selection.
+         * Preset values map directly to weeks (×7).
+         * Custom value is clamped to 1–9 and multiplied by the selected unit factor.
          *
-         * @param {string} card - The unrecognised card number.
+         * @returns {number} Loan period in days.
          */
-        openRegisterModal(card) {
-            this.pendingCard = card;
-            this.registerName = '';
-            this.registerEmail = '';
-            this.showModal = true;
-            this.$nextTick(() => document.getElementById('register-name')?.focus());
-        },
-
-        /**
-         * Submit the new-patron registration form.
-         * On success the modal closes and the patron is loaded automatically.
-         *
-         * @returns {Promise<void>}
-         */
-        async confirmRegister() {
-            if (!this.registerName.trim()) return;
-            this.registerLoading = true;
-            try {
-                const r = await fetch('/api/patrons/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        card_number: this.pendingCard,
-                        name: this.registerName.trim(),
-                        email: this.registerEmail.trim() || null,
-                    }),
-                });
-                const data = await r.json();
-                if (!r.ok) {
-                    this.toast(data.error || 'Registration failed', 'error');
-                    return;
-                }
-                this.showModal = false;
-                this.cardInput = this.pendingCard;
-                this.toast(`Registered ${data.name}`, 'success');
-                await this.lookupPatron();
-            } catch (e) {
-                this.toast(e.message, 'error');
-            } finally {
-                this.registerLoading = false;
+        _computeLoanDays() {
+            if (this.loanPreset !== 'custom') {
+                return parseInt(this.loanPreset, 10) * 7;
             }
+            const val = Math.max(1, Math.min(9, this.customLoanValue || 1));
+            const factors = { days: 1, weeks: 7, months: 30 };
+            return val * (factors[this.customLoanUnit] ?? 7);
         },
 
         // ── Checkout / return / renew ─────────────────────────────
@@ -177,7 +153,9 @@ function checkoutApp() {
                 barcode,
                 category: this.category,
             };
-            if (this.action === 'renew') body.weeks = 3;
+            if (this.action === 'checkout' || this.action === 'renew') {
+                body.loan_days = this._computeLoanDays();
+            }
 
             this.actionLoading = true;
             try {
@@ -209,7 +187,7 @@ function checkoutApp() {
          */
         async refreshPatron() {
             try {
-                const r = await fetch(`/api/patrons/${this.patron.patron.card_number}`);
+                const r = await fetch(`/api/patrons/${encodeURIComponent(this.patron.patron.card_number)}`);
                 if (r.ok) this.patron = await r.json();
             } catch (_) { /* silent — stale UI is acceptable */ }
         },

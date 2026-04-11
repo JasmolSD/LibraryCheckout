@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from .database import db
 
@@ -17,13 +17,22 @@ class Patron(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     card_number = db.Column(db.String(14), unique=True, nullable=False, index=True)
-    name = db.Column(db.String(120), nullable=False)
+    last_name = db.Column(db.String(60), nullable=False)
+    first_name = db.Column(db.String(60), nullable=False)
+    middle_name = db.Column(db.String(60), nullable=True)
+    birth_date = db.Column(db.Date, nullable=False)
     email = db.Column(db.String(120), nullable=True)
+    phone = db.Column(db.String(20), nullable=True)
     created_at = db.Column(db.DateTime, default=_utcnow, nullable=False)
 
     checkouts = db.relationship(
         "Checkout", backref="patron", lazy="dynamic", cascade="all, delete-orphan"
     )
+
+    @property
+    def name(self) -> str:
+        """Full name in LAST, FIRST display format."""
+        return f"{self.last_name}, {self.first_name}"
 
     @property
     def masked_card(self) -> str:
@@ -34,8 +43,13 @@ class Patron(db.Model):
             "id": self.id,
             "card_number": self.card_number,
             "card_masked": self.masked_card,
+            "last_name": self.last_name,
+            "first_name": self.first_name,
+            "middle_name": self.middle_name,
             "name": self.name,
+            "birth_date": self.birth_date.isoformat() if self.birth_date else None,
             "email": self.email,
+            "phone": self.phone,
             "created_at": self.created_at.isoformat(),
         }
 
@@ -72,7 +86,8 @@ class Checkout(db.Model):
 
     # action: checkout | return | renew
     action = db.Column(db.String(20), default="checkout", nullable=False)
-    weeks = db.Column(db.Integer, default=3, nullable=False)
+    # Total loan duration in days (0 for return audit rows)
+    loan_days = db.Column(db.Integer, default=14, nullable=False)
 
     checked_out_at = db.Column(db.DateTime, default=_utcnow, nullable=False)
     due_date = db.Column(db.DateTime, nullable=True)
@@ -95,7 +110,7 @@ class Checkout(db.Model):
             "title": self.book.title if self.book else None,
             "category": self.book.category if self.book else None,
             "action": self.action,
-            "weeks": self.weeks,
+            "loan_days": self.loan_days,
             "checked_out_at": self.checked_out_at.isoformat(),
             "due_date": self.due_date.isoformat() if self.due_date else None,
             "returned_at": self.returned_at.isoformat() if self.returned_at else None,

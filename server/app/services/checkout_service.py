@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from flask import current_app
 
@@ -10,8 +10,7 @@ from ..database import db
 from ..models import Book, Checkout, Patron
 from .validators import (
     ValidationError,
-    normalize_name,
-    parse_checkout_prefix,
+    validate_barcode,
     validate_card,
 )
 
@@ -21,30 +20,52 @@ def _utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-def get_or_create_patron(card: str, name: str | None = None, email: str | None = None) -> Patron:
+def get_or_create_patron(
+    card: str,
+    first_name: str | None = None,
+    last_name: str | None = None,
+    middle_name: str | None = None,
+    birth_date: date | None = None,
+    email: str | None = None,
+    phone: str | None = None,
+) -> Patron:
     """Look up a patron by card number, registering a new one if not found.
 
     Args:
         card: Raw library card number (validated internally).
-        name: Required only when the patron does not yet exist.  Accepts
-            "LAST, FIRST" or "First Last" format — normalised to upper-case
-            "LAST, FIRST" before storage.
+        first_name: Required only when the patron does not yet exist.
+        last_name: Required only when the patron does not yet exist.
+        middle_name: Optional middle name.
+        birth_date: Required only when the patron does not yet exist.
         email: Optional contact email address.
+        phone: Optional contact phone number.
 
     Returns:
         The existing or newly-created :class:`~server.app.models.Patron`.
 
     Raises:
-        ValidationError: If the card number is invalid, or if ``name`` is
-            omitted for a new patron.
+        ValidationError: If the card number is invalid, or if required fields
+            are omitted for a new patron.
     """
     card = validate_card(card)
     patron = Patron.query.filter_by(card_number=card).first()
     if patron:
         return patron
-    if not name:
-        raise ValidationError("Name required for new patron registration")
-    patron = Patron(card_number=card, name=normalize_name(name), email=email)
+    if not first_name or not first_name.strip():
+        raise ValidationError("First name required for new patron registration")
+    if not last_name or not last_name.strip():
+        raise ValidationError("Last name required for new patron registration")
+    if birth_date is None:
+        raise ValidationError("Birth date required for new patron registration")
+    patron = Patron(
+        card_number=card,
+        first_name=first_name.strip().upper(),
+        last_name=last_name.strip().upper(),
+        middle_name=middle_name.strip().upper() if middle_name and middle_name.strip() else None,
+        birth_date=birth_date,
+        email=email,
+        phone=phone,
+    )
     db.session.add(patron)
     db.session.commit()
     current_app.logger.info("Registered new patron %s", patron.masked_card)
@@ -77,18 +98,33 @@ def get_or_create_book(barcode: str, title: str | None = None, category: str = "
 
 
 def checkout_item(
-    card: str, item_input: str, category: str = "book", title: str | None = None
+    card: str,
+    barcode: str,
+    loan_days: int = 14,
+    category: str = "book",
+    title: str | None = None,
 ) -> Checkout:
     """Check out a single item to a patron.
 
-    Mirrors the VBA flow: validate card, parse 3W/2W prefix, dedupe active
-    checkouts of the same barcode, compute due date.
+    Args:
+        card: Raw library card number (validated internally).
+        barcode: Raw item barcode (validated internally).
+        loan_days: Loan period in days (default 14).
+        category: Item category string (default ``"book"``).
+        title: Optional human-readable item title stored on first encounter.
+
+    Returns:
+        The newly-created :class:`~server.app.models.Checkout` record.
+
+    Raises:
+        ValidationError: If the card or barcode is invalid, the patron is not
+            found, or the item is already checked out.
     """
     patron = Patron.query.filter_by(card_number=validate_card(card)).first()
     if not patron:
         raise ValidationError("Patron not found — register first")
 
-    barcode, weeks = parse_checkout_prefix(item_input)
+    barcode = validate_barcode(barcode)
 
     # VBA dup check: prevent same barcode being checked out twice while active
     book = get_or_create_book(barcode, title=title, category=category)
@@ -99,19 +135,19 @@ def checkout_item(
         raise ValidationError(f"Item {barcode} is already checked out")
 
     now = _utcnow()
-    due = now + timedelta(weeks=weeks)
+    due = now + timedelta(days=loan_days)
     co = Checkout(
         patron_id=patron.id,
         book_id=book.id,
         action="checkout",
-        weeks=weeks,
+        loan_days=loan_days,
         checked_out_at=now,
         due_date=due,
     )
     db.session.add(co)
     db.session.commit()
     current_app.logger.info(
-        "Checkout: patron=%s book=%s weeks=%d", patron.masked_card, barcode, weeks
+        "Checkout: patron=%s book=%s loan_days=%d", patron.masked_card, barcode, loan_days
     )
     return co
 
@@ -120,7 +156,7 @@ def return_item(barcode: str) -> Checkout:
     """Mark the active checkout for an item as returned and log an audit row.
 
     Args:
-        barcode: Raw item barcode (week prefix stripped automatically).
+        barcode: Raw item barcode.
 
     Returns:
         The newly-created ``action="return"`` :class:`~server.app.models.Checkout`
@@ -130,7 +166,7 @@ def return_item(barcode: str) -> Checkout:
         ValidationError: If the barcode is unknown or the item is not currently
             checked out.
     """
-    barcode = parse_checkout_prefix(barcode)[0]
+    barcode = validate_barcode(barcode)
     book = Book.query.filter_by(barcode=barcode).first()
     if not book:
         raise ValidationError(f"Unknown item {barcode}")
@@ -145,7 +181,7 @@ def return_item(barcode: str) -> Checkout:
         patron_id=active.patron_id,
         book_id=book.id,
         action="return",
-        weeks=0,
+        loan_days=0,
         checked_out_at=_utcnow(),
     )
     db.session.add(ret)
@@ -154,12 +190,12 @@ def return_item(barcode: str) -> Checkout:
     return ret
 
 
-def renew_item(barcode: str, weeks: int = 3) -> Checkout:
+def renew_item(barcode: str, loan_days: int = 14) -> Checkout:
     """Extend the due date of an active checkout from today.
 
     Args:
-        barcode: Raw item barcode (week prefix stripped automatically).
-        weeks: Number of weeks to add from today (default 3).
+        barcode: Raw item barcode.
+        loan_days: Number of days to extend from today (default 14).
 
     Returns:
         The updated :class:`~server.app.models.Checkout` record.
@@ -168,22 +204,56 @@ def renew_item(barcode: str, weeks: int = 3) -> Checkout:
         ValidationError: If the barcode is unknown or the item is not currently
             checked out.
     """
-    barcode = parse_checkout_prefix(barcode)[0]
+    barcode = validate_barcode(barcode)
     book = Book.query.filter_by(barcode=barcode).first()
     if not book:
         raise ValidationError(f"Unknown item {barcode}")
     active = Checkout.query.filter_by(book_id=book.id, action="checkout", returned_at=None).first()
     if not active:
         raise ValidationError(f"Item {barcode} is not currently checked out")
-    active.due_date = _utcnow() + timedelta(weeks=weeks)
-    active.weeks = weeks
+    active.due_date = _utcnow() + timedelta(days=loan_days)
+    active.loan_days = loan_days
     db.session.commit()
-    current_app.logger.info("Renew: book=%s weeks=%d", barcode, weeks)
+    current_app.logger.info("Renew: book=%s loan_days=%d", barcode, loan_days)
     return active
 
 
+def search_patrons(query: str) -> list[Patron]:
+    """Search patrons by first or last name (case-insensitive partial match).
+
+    Args:
+        query: Search string to match against first_name or last_name.
+
+    Returns:
+        List of matching :class:`~server.app.models.Patron` records, up to 50.
+    """
+    q = query.strip().upper()
+    if not q:
+        return []
+    return (
+        Patron.query.filter(
+            db.or_(
+                Patron.last_name.contains(q),
+                Patron.first_name.contains(q),
+            )
+        )
+        .limit(50)
+        .all()
+    )
+
+
 def patron_summary(card: str) -> dict:
-    """Build the dashboard summary card."""
+    """Build the dashboard summary card.
+
+    Args:
+        card: Raw library card number (validated internally).
+
+    Returns:
+        Dictionary with patron info, counts, active items, and history.
+
+    Raises:
+        ValidationError: If the card number is invalid or patron not found.
+    """
     card = validate_card(card)
     patron = Patron.query.filter_by(card_number=card).first()
     if not patron:

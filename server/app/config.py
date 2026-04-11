@@ -43,8 +43,8 @@ class BaseConfig:
     LIBRARY_HOURS = os.getenv("LIBRARY_HOURS", "")
     APP_TITLE = os.getenv("APP_TITLE", "Library Checkout")
 
-    # Default checkout period in weeks (matches the legacy VBA default)
-    DEFAULT_CHECKOUT_WEEKS = 3
+    # Default checkout period in weeks
+    DEFAULT_CHECKOUT_WEEKS = 2
     VALID_BARCODE_LENGTHS = (10, 14)
     MAX_ITEMS_PER_CHECKOUT = 50
 

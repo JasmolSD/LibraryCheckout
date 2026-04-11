@@ -1,5 +1,7 @@
 """Pytest fixtures — fresh in-memory DB per test."""
 
+from datetime import date
+
 import pytest
 
 from server.app import create_app
@@ -26,4 +28,9 @@ def patron(app):
     """Pre-seeded patron for tests that need one."""
     from server.app.services.checkout_service import get_or_create_patron
 
-    return get_or_create_patron(card="1234567890", name="DOE, JANE")
+    return get_or_create_patron(
+        card="1234567890",
+        first_name="JANE",
+        last_name="DOE",
+        birth_date=date(1990, 1, 15),
+    )

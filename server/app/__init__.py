@@ -139,6 +139,13 @@ def create_app(config_name: str | None = None) -> Flask:
 
         return render_template("help.html")
 
+    @app.route("/register")
+    def register_page():
+        """Render the new-patron registration page."""
+        from flask import render_template
+
+        return render_template("register.html")
+
     @app.route("/api/health")
     def health():
         """Health-check endpoint used by monitoring and CI smoke tests.
