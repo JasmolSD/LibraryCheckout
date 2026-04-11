@@ -21,6 +21,13 @@ def _utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+# ── Stats cache ──────────────────────────────────────────────────────────────
+
+_STATS_CACHE_TTL = 30  # seconds
+_stats_cache: dict | None = None
+_stats_cache_time: float = 0
+
+
 def next_card_number() -> str:
     """Return the next sequential 14-digit library card number.
 
@@ -257,8 +264,23 @@ def renew_item(barcode: str, loan_days: int = 14) -> Loan:
     return active
 
 
-def library_stats() -> dict:
-    """Aggregate library-wide statistics for the dashboard."""
+def library_stats(*, force: bool = False) -> dict:
+    """Aggregate library-wide statistics for the dashboard.
+
+    Results are cached for ``_STATS_CACHE_TTL`` seconds.  Pass
+    ``force=True`` to bypass the cache (e.g. when the user clicks Refresh).
+    """
+    global _stats_cache, _stats_cache_time  # noqa: PLW0603
+
+    import time
+
+    if (
+        not force
+        and _stats_cache is not None
+        and (time.monotonic() - _stats_cache_time) < _STATS_CACHE_TTL
+    ):
+        return _stats_cache
+
     now = _utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = now - timedelta(days=7)
@@ -303,7 +325,7 @@ def library_stats() -> dict:
         .all()
     )
 
-    return {
+    result = {
         "total_patrons": total_patrons,
         "total_books": total_books,
         "active_checkouts": active_checkouts,
@@ -318,6 +340,11 @@ def library_stats() -> dict:
         ],
         "generated_at": now.isoformat(),
     }
+
+    _stats_cache = result
+    _stats_cache_time = time.monotonic()
+
+    return result
 
 
 def search_patrons(query: str) -> list[Patron]:

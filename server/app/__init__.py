@@ -163,12 +163,16 @@ def create_app(config_name: str | None = None) -> Flask:
 
     @app.route("/api/stats")
     def stats_api():
-        """Return aggregate library statistics as JSON."""
-        from flask import jsonify
+        """Return aggregate library statistics as JSON.
+
+        Pass ``?refresh=1`` to bypass the server-side cache.
+        """
+        from flask import jsonify, request
 
         from .services import checkout_service
 
-        return jsonify(checkout_service.library_stats())
+        force = request.args.get("refresh") == "1"
+        return jsonify(checkout_service.library_stats(force=force))
 
     @app.route("/api/health")
     def health():

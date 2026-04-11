@@ -18,7 +18,7 @@
                 <p class="text-sm text-slate-400" x-text="generatedAt ? 'As of ' + generatedAt : 'Loading…'"></p>
             </div>
         </div>
-        <button @click="load()"
+        <button @click="load(true)"
                 :disabled="loading"
                 class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-sm
                        hover:bg-slate-50 transition-colors disabled:opacity-50 flex items-center gap-1.5">
@@ -262,7 +262,7 @@ function statsApp() {
             await this.load();
         },
 
-        async load() {
+        async load(refresh = false) {
             this.loading = true;
             this.errorMsg = '';
             // Reset overdue cache so refresh also re-fetches overdue list
@@ -272,7 +272,8 @@ function statsApp() {
                 await this.fetchOverdue();
             }
             try {
-                const r = await fetch('/api/stats');
+                const url = refresh ? '/api/stats?refresh=1' : '/api/stats';
+                const r = await fetch(url);
                 if (!r.ok) throw new Error('Server error');
                 const data = await r.json();
                 this.stats = data;

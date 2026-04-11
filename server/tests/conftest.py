@@ -17,6 +17,12 @@ def app():
         db.session.remove()
         db.drop_all()
 
+        # Clear the stats cache so it doesn't leak between tests
+        from server.app.services import checkout_service
+
+        checkout_service._stats_cache = None
+        checkout_service._stats_cache_time = 0
+
 
 @pytest.fixture
 def client(app):
