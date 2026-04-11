@@ -8,7 +8,7 @@ from flask import current_app
 from sqlalchemy import func
 
 from ..database import db
-from ..models import Book, Checkout, Patron
+from ..models import Book, Loan, Patron, Transaction
 from .validators import (
     ValidationError,
     validate_barcode,
@@ -49,24 +49,7 @@ def get_or_create_patron(
     email: str | None = None,
     phone: str | None = None,
 ) -> Patron:
-    """Look up a patron by card number, registering a new one if not found.
-
-    Args:
-        card: Raw library card number (validated internally).
-        first_name: Required only when the patron does not yet exist.
-        last_name: Required only when the patron does not yet exist.
-        middle_name: Optional middle name.
-        birth_date: Required only when the patron does not yet exist.
-        email: Optional contact email address.
-        phone: Optional contact phone number.
-
-    Returns:
-        The existing or newly-created :class:`~server.app.models.Patron`.
-
-    Raises:
-        ValidationError: If the card number is invalid, or if required fields
-            are omitted for a new patron.
-    """
+    """Look up a patron by card number, registering a new one if not found."""
     card = validate_card(card)
     patron = Patron.query.filter_by(card_number=card).first()
     if patron:
@@ -98,20 +81,7 @@ def add_book_to_catalog(
     author: str | None = None,
     category: str = "book",
 ) -> Book:
-    """Add a new item to the catalog without checking it out.
-
-    Args:
-        barcode: Raw ISBN or library barcode (validated internally).
-        title: Optional item title.
-        author: Optional author name.
-        category: Item category (default ``"book"``).
-
-    Returns:
-        The newly-created :class:`~server.app.models.Book`.
-
-    Raises:
-        ValidationError: If the barcode is invalid or already exists.
-    """
+    """Add a new item to the catalog without checking it out."""
     barcode = validate_barcode(barcode)
     if Book.query.filter_by(barcode=barcode).first():
         raise ValidationError(f"Item {barcode} is already in the catalog")
@@ -128,37 +98,31 @@ def add_book_to_catalog(
 
 
 def overdue_items() -> list[dict]:
-    """Return all currently overdue checkouts with patron and book details.
-
-    Returns:
-        List of dicts, each containing patron name, card info, book info,
-        due date, and days overdue, ordered by most overdue first.
-    """
+    """Return all currently overdue loans with patron and book details."""
     now = _utcnow()
     rows = (
-        Checkout.query.filter(
-            Checkout.action == "checkout",
-            Checkout.returned_at.is_(None),
-            Checkout.due_date < now,
+        Loan.query.filter(
+            Loan.returned_at.is_(None),
+            Loan.due_date < now,
         )
-        .join(Patron, Checkout.patron_id == Patron.id)
-        .join(Book, Checkout.book_id == Book.id)
-        .order_by(Checkout.due_date.asc())
+        .join(Patron, Loan.patron_id == Patron.id)
+        .join(Book, Loan.book_id == Book.id)
+        .order_by(Loan.due_date.asc())
         .all()
     )
     result = []
-    for co in rows:
-        days = (now - co.due_date).days
+    for loan in rows:
+        days = (now - loan.due_date).days
         result.append(
             {
-                "patron_name": co.patron.name,
-                "card_number": co.patron.card_number,
-                "card_masked": co.patron.masked_card,
-                "book_title": co.book.title or "(untitled)",
-                "barcode": co.book.barcode,
-                "category": co.book.category,
-                "checked_out_at": co.checked_out_at.isoformat(),
-                "due_date": co.due_date.isoformat(),
+                "patron_name": loan.patron.name,
+                "card_number": loan.patron.card_number,
+                "card_masked": loan.patron.masked_card,
+                "book_title": loan.book.title or "(untitled)",
+                "barcode": loan.book.barcode,
+                "category": loan.book.category,
+                "checked_out_at": loan.checked_out_at.isoformat(),
+                "due_date": loan.due_date.isoformat(),
                 "days_overdue": days,
             }
         )
@@ -166,19 +130,7 @@ def overdue_items() -> list[dict]:
 
 
 def get_or_create_book(barcode: str, title: str | None = None, category: str = "book") -> Book:
-    """Look up an item by barcode, creating a new record if not found.
-
-    If the book already exists but has no title, and a ``title`` is provided,
-    the existing record is updated in-place without committing (caller must commit).
-
-    Args:
-        barcode: Validated 10- or 14-digit item barcode.
-        title: Optional human-readable item title.
-        category: Item category string (default ``"book"``).
-
-    Returns:
-        The existing or newly-flushed :class:`~server.app.models.Book`.
-    """
+    """Look up an item by barcode, creating a new record if not found."""
     book = Book.query.filter_by(barcode=barcode).first()
     if book:
         if title and not book.title:
@@ -196,22 +148,10 @@ def checkout_item(
     loan_days: int = 14,
     category: str = "book",
     title: str | None = None,
-) -> Checkout:
+) -> Loan:
     """Check out a single item to a patron.
 
-    Args:
-        card: Raw library card number (validated internally).
-        barcode: Raw item barcode (validated internally).
-        loan_days: Loan period in days (default 14).
-        category: Item category string (default ``"book"``).
-        title: Optional human-readable item title stored on first encounter.
-
-    Returns:
-        The newly-created :class:`~server.app.models.Checkout` record.
-
-    Raises:
-        ValidationError: If the card or barcode is invalid, the patron is not
-            found, or the item is already checked out.
+    Creates a Loan record and a corresponding Transaction audit entry.
     """
     patron = Patron.query.filter_by(card_number=validate_card(card)).first()
     if not patron:
@@ -219,104 +159,87 @@ def checkout_item(
 
     barcode = validate_barcode(barcode)
 
-    # VBA dup check: prevent same barcode being checked out twice while active
     book = get_or_create_book(barcode, title=title, category=category)
-    existing = Checkout.query.filter_by(
-        book_id=book.id, action="checkout", returned_at=None
+    existing = Loan.query.filter_by(
+        book_id=book.id, returned_at=None
     ).first()
     if existing:
         raise ValidationError(f"Item {barcode} is already checked out")
 
     now = _utcnow()
     due = now + timedelta(days=loan_days)
-    co = Checkout(
+    loan = Loan(
         patron_id=patron.id,
         book_id=book.id,
-        action="checkout",
         loan_days=loan_days,
         checked_out_at=now,
         due_date=due,
     )
-    db.session.add(co)
+    db.session.add(loan)
+    db.session.flush()
+
+    txn = Transaction(loan_id=loan.id, action="checkout", created_at=now)
+    db.session.add(txn)
     db.session.commit()
+
     current_app.logger.info(
         "Checkout: patron=%s book=%s loan_days=%d", patron.masked_card, barcode, loan_days
     )
-    return co
+    return loan
 
 
-def return_item(barcode: str) -> Checkout:
-    """Mark the active checkout for an item as returned and log an audit row.
+def return_item(barcode: str) -> Loan:
+    """Mark the active loan for an item as returned.
 
-    Args:
-        barcode: Raw item barcode.
-
-    Returns:
-        The newly-created ``action="return"`` :class:`~server.app.models.Checkout`
-        audit record.
-
-    Raises:
-        ValidationError: If the barcode is unknown or the item is not currently
-            checked out.
+    Sets returned_at on the Loan and logs a Transaction audit entry.
     """
     barcode = validate_barcode(barcode)
     book = Book.query.filter_by(barcode=barcode).first()
     if not book:
         raise ValidationError(f"Unknown item {barcode}")
 
-    active = Checkout.query.filter_by(book_id=book.id, action="checkout", returned_at=None).first()
+    active = Loan.query.filter_by(book_id=book.id, returned_at=None).first()
     if not active:
         raise ValidationError(f"Item {barcode} is not currently checked out")
 
-    active.returned_at = _utcnow()
-    # Log a separate audit row for the return action
-    ret = Checkout(
-        patron_id=active.patron_id,
-        book_id=book.id,
-        action="return",
-        loan_days=0,
-        checked_out_at=_utcnow(),
-    )
-    db.session.add(ret)
+    now = _utcnow()
+    active.returned_at = now
+
+    txn = Transaction(loan_id=active.id, action="return", created_at=now)
+    db.session.add(txn)
     db.session.commit()
+
     current_app.logger.info("Return: book=%s", barcode)
-    return ret
+    return active
 
 
-def renew_item(barcode: str, loan_days: int = 14) -> Checkout:
-    """Extend the due date of an active checkout from today.
+def renew_item(barcode: str, loan_days: int = 14) -> Loan:
+    """Extend the due date of an active loan from today.
 
-    Args:
-        barcode: Raw item barcode.
-        loan_days: Number of days to extend from today (default 14).
-
-    Returns:
-        The updated :class:`~server.app.models.Checkout` record.
-
-    Raises:
-        ValidationError: If the barcode is unknown or the item is not currently
-            checked out.
+    Updates the Loan's due_date and logs a Transaction audit entry.
     """
     barcode = validate_barcode(barcode)
     book = Book.query.filter_by(barcode=barcode).first()
     if not book:
         raise ValidationError(f"Unknown item {barcode}")
-    active = Checkout.query.filter_by(book_id=book.id, action="checkout", returned_at=None).first()
+    active = Loan.query.filter_by(book_id=book.id, returned_at=None).first()
     if not active:
         raise ValidationError(f"Item {barcode} is not currently checked out")
-    active.due_date = _utcnow() + timedelta(days=loan_days)
+
+    now = _utcnow()
+    active.due_date = now + timedelta(days=loan_days)
     active.loan_days = loan_days
+
+    txn = Transaction(loan_id=active.id, action="renew", created_at=now)
+    db.session.add(txn)
     db.session.commit()
+
     current_app.logger.info("Renew: book=%s loan_days=%d", barcode, loan_days)
     return active
 
 
 def library_stats() -> dict:
-    """Aggregate library-wide statistics for the dashboard.
-
-    Returns:
-        Dictionary with counts, breakdowns, and a top-books list.
-    """
+    """Aggregate library-wide statistics for the dashboard."""
     now = _utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = now - timedelta(days=7)
@@ -324,43 +247,41 @@ def library_stats() -> dict:
     total_patrons = Patron.query.count()
     total_books = Book.query.count()
 
-    active_checkouts = Checkout.query.filter(
-        Checkout.action == "checkout", Checkout.returned_at.is_(None)
+    active_checkouts = Loan.query.filter(
+        Loan.returned_at.is_(None)
     ).count()
 
-    overdue_items = Checkout.query.filter(
-        Checkout.action == "checkout",
-        Checkout.returned_at.is_(None),
-        Checkout.due_date < now,
+    overdue_count = Loan.query.filter(
+        Loan.returned_at.is_(None),
+        Loan.due_date < now,
     ).count()
 
-    total_checkout_events = Checkout.query.filter_by(action="checkout").count()
+    total_checkout_events = Transaction.query.filter_by(action="checkout").count()
 
-    checkouts_today = Checkout.query.filter(
-        Checkout.action == "checkout",
-        Checkout.checked_out_at >= today_start,
+    checkouts_today = Transaction.query.filter(
+        Transaction.action == "checkout",
+        Transaction.created_at >= today_start,
     ).count()
 
-    checkouts_this_week = Checkout.query.filter(
-        Checkout.action == "checkout",
-        Checkout.checked_out_at >= week_start,
+    checkouts_this_week = Transaction.query.filter(
+        Transaction.action == "checkout",
+        Transaction.created_at >= week_start,
     ).count()
 
     by_category = (
-        db.session.query(Book.category, func.count(Checkout.id))
-        .join(Checkout, Checkout.book_id == Book.id)
-        .filter(Checkout.action == "checkout", Checkout.returned_at.is_(None))
+        db.session.query(Book.category, func.count(Loan.id))
+        .join(Loan, Loan.book_id == Book.id)
+        .filter(Loan.returned_at.is_(None))
         .group_by(Book.category)
-        .order_by(func.count(Checkout.id).desc())
+        .order_by(func.count(Loan.id).desc())
         .all()
     )
 
     top_books = (
-        db.session.query(Book.title, Book.barcode, func.count(Checkout.id).label("cnt"))
-        .join(Checkout, Checkout.book_id == Book.id)
-        .filter(Checkout.action == "checkout")
+        db.session.query(Book.title, Book.barcode, func.count(Loan.id).label("cnt"))
+        .join(Loan, Loan.book_id == Book.id)
         .group_by(Book.id)
-        .order_by(func.count(Checkout.id).desc())
+        .order_by(func.count(Loan.id).desc())
         .limit(5)
         .all()
     )
@@ -369,7 +290,7 @@ def library_stats() -> dict:
         "total_patrons": total_patrons,
         "total_books": total_books,
         "active_checkouts": active_checkouts,
-        "overdue_items": overdue_items,
+        "overdue_items": overdue_count,
         "total_checkout_events": total_checkout_events,
         "checkouts_today": checkouts_today,
         "checkouts_this_week": checkouts_this_week,
@@ -383,14 +304,7 @@ def library_stats() -> dict:
 
 
 def search_patrons(query: str) -> list[Patron]:
-    """Search patrons by first or last name (case-insensitive partial match).
-
-    Args:
-        query: Search string to match against first_name or last_name.
-
-    Returns:
-        List of matching :class:`~server.app.models.Patron` records, up to 50.
-    """
+    """Search patrons by first or last name (case-insensitive partial match)."""
     q = query.strip().upper()
     if not q:
         return []
@@ -407,35 +321,30 @@ def search_patrons(query: str) -> list[Patron]:
 
 
 def patron_summary(card: str) -> dict:
-    """Build the dashboard summary card.
-
-    Args:
-        card: Raw library card number (validated internally).
-
-    Returns:
-        Dictionary with patron info, counts, active items, and history.
-
-    Raises:
-        ValidationError: If the card number is invalid or patron not found.
-    """
+    """Build the dashboard summary card."""
     card = validate_card(card)
     patron = Patron.query.filter_by(card_number=card).first()
     if not patron:
         raise ValidationError("Patron not found")
 
-    all_checkouts = Checkout.query.filter_by(patron_id=patron.id, action="checkout").all()
-    active = [c for c in all_checkouts if c.is_active]
-    late = [c for c in active if c.is_late]
+    all_loans = Loan.query.filter_by(patron_id=patron.id).all()
+    active = [ln for ln in all_loans if ln.is_active]
+    late = [ln for ln in active if ln.is_late]
+
+    # Build history from transactions, ordered newest first
     history = (
-        Checkout.query.filter_by(patron_id=patron.id).order_by(Checkout.checked_out_at.desc()).all()
+        Transaction.query.join(Loan, Transaction.loan_id == Loan.id)
+        .filter(Loan.patron_id == patron.id)
+        .order_by(Transaction.created_at.desc())
+        .all()
     )
 
     return {
         "patron": patron.to_dict(),
         "account_age_days": (_utcnow() - patron.created_at).days,
-        "total_checkouts": len(all_checkouts),
+        "total_checkouts": len(all_loans),
         "currently_out": len(active),
         "late_count": len(late),
-        "active_items": [c.to_dict() for c in active],
-        "history": [c.to_dict() for c in history],
+        "active_items": [ln.to_dict() for ln in active],
+        "history": [txn.to_dict() for txn in history],
     }

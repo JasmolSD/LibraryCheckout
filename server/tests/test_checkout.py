@@ -7,15 +7,21 @@ from server.app.services.validators import ValidationError
 
 
 def test_checkout_creates_record(app, patron):
-    co = checkout_service.checkout_item(card="1234567890", barcode="9999999999", category="book")
-    assert co.action == "checkout"
-    assert co.loan_days == 14  # default is 14 days
-    assert co.due_date is not None
+    loan = checkout_service.checkout_item(card="1234567890", barcode="9999999999", category="book")
+    assert loan.returned_at is None  # active loan
+    assert loan.loan_days == 14  # default is 14 days
+    assert loan.due_date is not None
+
+
+def test_checkout_creates_transaction(app, patron):
+    loan = checkout_service.checkout_item(card="1234567890", barcode="9999999999")
+    assert len(loan.transactions) == 1
+    assert loan.transactions[0].action == "checkout"
 
 
 def test_checkout_explicit_loan_days(app, patron):
-    co = checkout_service.checkout_item(card="1234567890", barcode="9999999999", loan_days=7)
-    assert co.loan_days == 7
+    loan = checkout_service.checkout_item(card="1234567890", barcode="9999999999", loan_days=7)
+    assert loan.loan_days == 7
 
 
 def test_checkout_dedupes_active(app, patron):
@@ -28,8 +34,25 @@ def test_return_clears_active(app, patron):
     checkout_service.checkout_item(card="1234567890", barcode="9999999999")
     checkout_service.return_item("9999999999")
     # Should be re-checkoutable now
-    co = checkout_service.checkout_item(card="1234567890", barcode="9999999999")
-    assert co.action == "checkout"
+    loan = checkout_service.checkout_item(card="1234567890", barcode="9999999999")
+    assert loan.is_active
+
+
+def test_return_sets_returned_at(app, patron):
+    checkout_service.checkout_item(card="1234567890", barcode="9999999999")
+    returned = checkout_service.return_item("9999999999")
+    assert returned.returned_at is not None
+    assert not returned.is_active
+
+
+def test_return_creates_transaction(app, patron):
+    loan = checkout_service.checkout_item(card="1234567890", barcode="9999999999")
+    checkout_service.return_item("9999999999")
+    # Loan should now have 2 transactions: checkout + return
+    assert len(loan.transactions) == 2
+    actions = [t.action for t in loan.transactions]
+    assert "checkout" in actions
+    assert "return" in actions
 
 
 def test_return_unknown_item(app, patron):
@@ -38,12 +61,20 @@ def test_return_unknown_item(app, patron):
 
 
 def test_renew_extends_due_date(app, patron):
-    co = checkout_service.checkout_item(card="1234567890", barcode="9999999999")
-    original_due = co.due_date
+    loan = checkout_service.checkout_item(card="1234567890", barcode="9999999999")
+    original_due = loan.due_date
     renewed = checkout_service.renew_item("9999999999", loan_days=21)
     assert original_due is not None
     assert renewed.due_date is not None
     assert renewed.due_date > original_due
+
+
+def test_renew_creates_transaction(app, patron):
+    loan = checkout_service.checkout_item(card="1234567890", barcode="9999999999")
+    checkout_service.renew_item("9999999999", loan_days=21)
+    assert len(loan.transactions) == 2
+    actions = [t.action for t in loan.transactions]
+    assert "renew" in actions
 
 
 def test_summary_counts(app, patron):
@@ -65,5 +96,5 @@ def test_renew_bad_loan_days_returns_400(client, patron):
 
 
 def test_categories_persisted(app, patron):
-    co = checkout_service.checkout_item(card="1234567890", barcode="3333333333", category="dvd")
-    assert co.book.category == "dvd"
+    loan = checkout_service.checkout_item(card="1234567890", barcode="3333333333", category="dvd")
+    assert loan.book.category == "dvd"

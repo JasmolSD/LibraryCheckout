@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 from server.app.database import db
-from server.app.models import Checkout
+from server.app.models import Loan
 
 # ── GET /api/stats ────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ class TestStats:
                 "title": "1984",
             },
         )
-        data = r = client.get("/api/stats")
+        r = client.get("/api/stats")
         data = r.get_json()
         assert data["active_checkouts"] == 1
         assert data["total_checkout_events"] == 1
@@ -108,9 +108,9 @@ class TestStats:
             },
         )
         # Force the due_date into the past
-        co = Checkout.query.filter_by(action="checkout").first()
-        assert co is not None
-        co.due_date = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=3)
+        loan = Loan.query.filter(Loan.returned_at.is_(None)).first()
+        assert loan is not None
+        loan.due_date = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=3)
         db.session.commit()
 
         data = client.get("/api/stats").get_json()
@@ -149,9 +149,9 @@ class TestOverdue:
                 "title": "Nineteen Eighty-Four",
             },
         )
-        co = Checkout.query.filter_by(action="checkout").first()
-        assert co is not None
-        co.due_date = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
+        loan = Loan.query.filter(Loan.returned_at.is_(None)).first()
+        assert loan is not None
+        loan.due_date = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
         db.session.commit()
 
         data = client.get("/api/checkouts/overdue").get_json()
@@ -171,9 +171,9 @@ class TestOverdue:
                 "barcode": "9780451524935",
             },
         )
-        co = Checkout.query.filter_by(action="checkout").first()
-        assert co is not None
-        co.due_date = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=5)
+        loan = Loan.query.filter(Loan.returned_at.is_(None)).first()
+        assert loan is not None
+        loan.due_date = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=5)
         db.session.commit()
 
         client.post("/api/checkouts/return", json={"barcode": "9780451524935"})
@@ -198,7 +198,7 @@ class TestOverdue:
                 "title": "Book B",
             },
         )
-        rows = Checkout.query.filter_by(action="checkout").all()
+        rows = Loan.query.filter(Loan.returned_at.is_(None)).all()
         rows[0].due_date = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=10)
         rows[1].due_date = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=2)
         db.session.commit()
@@ -218,9 +218,9 @@ class TestOverdue:
                 "category": "book",
             },
         )
-        co = Checkout.query.filter_by(action="checkout").first()
-        assert co is not None
-        co.due_date = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=1)
+        loan = Loan.query.filter(Loan.returned_at.is_(None)).first()
+        assert loan is not None
+        loan.due_date = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=1)
         db.session.commit()
 
         row = client.get("/api/checkouts/overdue").get_json()["overdue"][0]

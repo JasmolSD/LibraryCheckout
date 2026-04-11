@@ -9,10 +9,10 @@ from flask import current_app
 from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfgen import canvas
 
-from ..models import Checkout, Patron
+from ..models import Loan, Patron
 
 
-def build_receipt_pdf(patron: Patron, items: list[Checkout]) -> bytes:
+def build_receipt_pdf(patron: Patron, items: list[Loan]) -> bytes:
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=LETTER)
     width, height = LETTER
@@ -46,13 +46,13 @@ def build_receipt_pdf(patron: Patron, items: list[Checkout]) -> bytes:
     y -= 14
 
     c.setFont("Helvetica", 10)
-    for co in items:
+    for loan in items:
         if y < 80:
             c.showPage()
             y = height - 60
-        c.drawString(60, y, co.book.barcode)
-        c.drawString(260, y, (co.book.title or "—")[:25])
-        c.drawString(420, y, co.due_date.strftime("%m/%d/%y") if co.due_date else "—")
+        c.drawString(60, y, loan.book.barcode)
+        c.drawString(260, y, (loan.book.title or "—")[:25])
+        c.drawString(420, y, loan.due_date.strftime("%m/%d/%y") if loan.due_date else "—")
         y -= 14
 
     y -= 10

@@ -13,7 +13,7 @@ bp = Blueprint("checkouts", __name__, url_prefix="/api/checkouts")
 
 @bp.get("/overdue")
 def overdue():
-    """Return all currently overdue checkouts with patron and book details.
+    """Return all currently overdue loans with patron and book details.
 
     Returns:
         200 with ``{"overdue": [...], "count": N}``
@@ -35,9 +35,8 @@ def checkout():
         title (str, optional): Human-readable item title stored on first encounter.
 
     Returns:
-        201 with the new :class:`Checkout` record as JSON on success.
-        400 ``{"error": "..."}`` on validation failure (patron not found, duplicate
-        active checkout, invalid barcode, etc.).
+        201 with the new Loan record as JSON on success.
+        400 ``{"error": "..."}`` on validation failure.
     """
     data = request.get_json() or {}
     try:
@@ -45,14 +44,14 @@ def checkout():
     except (ValueError, TypeError):
         return jsonify({"error": "loan_days must be an integer"}), 400
     try:
-        co = checkout_service.checkout_item(
+        loan = checkout_service.checkout_item(
             card=data.get("card_number", ""),
             barcode=data.get("barcode", ""),
             loan_days=loan_days,
             category=data.get("category", "book"),
             title=data.get("title"),
         )
-        return jsonify(co.to_dict()), 201
+        return jsonify(loan.to_dict()), 201
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400
 
@@ -65,9 +64,8 @@ def return_item():
         barcode (str): Item barcode.
 
     Returns:
-        200 with the return :class:`Checkout` audit record as JSON on success.
-        400 ``{"error": "..."}`` if the item is not currently checked out or the
-        barcode is invalid.
+        200 with the returned Loan record as JSON on success.
+        400 ``{"error": "..."}`` if the item is not currently checked out.
     """
     data = request.get_json() or {}
     try:
@@ -85,9 +83,8 @@ def renew_item():
         loan_days (int, optional): Number of days to extend from today.  Defaults to 14.
 
     Returns:
-        200 with the updated :class:`Checkout` record as JSON on success.
-        400 ``{"error": "..."}`` if the item is not currently checked out or the
-        barcode is invalid.
+        200 with the updated Loan record as JSON on success.
+        400 ``{"error": "..."}`` if the item is not currently checked out.
     """
     data = request.get_json() or {}
     try:
@@ -95,7 +92,7 @@ def renew_item():
     except (ValueError, TypeError):
         return jsonify({"error": "loan_days must be an integer"}), 400
     try:
-        co = checkout_service.renew_item(data.get("barcode", ""), loan_days)
-        return jsonify(co.to_dict())
+        loan = checkout_service.renew_item(data.get("barcode", ""), loan_days)
+        return jsonify(loan.to_dict())
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400
