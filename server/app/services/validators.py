@@ -8,7 +8,8 @@ values directly without pre-checking for ``None``.
 
 from __future__ import annotations
 
-VALID_LENGTHS = (10, 14)
+VALID_LENGTHS = (10, 13, 14)      # 13 = ISBN-13; 10 = ISBN-10 / legacy; 14 = EAN-14
+VALID_CARD_LENGTHS = (10, 14)     # library card numbers never use ISBN-13 length
 
 
 class ValidationError(ValueError):
@@ -20,7 +21,9 @@ class ValidationError(ValueError):
 
 
 def validate_barcode(raw: str | None) -> str:
-    """Strip whitespace and verify the value is a 10- or 14-digit barcode.
+    """Strip whitespace and verify the value is a 10-, 13-, or 14-digit barcode.
+
+    Accepts ISBN-10 (10 digits), ISBN-13 (13 digits), and EAN-14 (14 digits).
 
     Args:
         raw: Raw barcode string from user input or API request, or ``None``.
@@ -45,10 +48,7 @@ def validate_barcode(raw: str | None) -> str:
 
 
 def validate_card(raw: str | None) -> str:
-    """Validate a library card number using the same rules as item barcodes.
-
-    Library card numbers must be exactly 10 or 14 digits (matching the legacy
-    VBA implementation).
+    """Validate a library card number (10 or 14 digits only — not ISBN-13 length).
 
     Args:
         raw: Raw card number from user input or API request, or ``None``.
@@ -57,9 +57,20 @@ def validate_card(raw: str | None) -> str:
         The cleaned card number string.
 
     Raises:
-        ValidationError: Delegated from :func:`validate_barcode`.
+        ValidationError: If the card number is invalid.
     """
-    return validate_barcode(raw)
+    if raw is None:
+        raise ValidationError("Card number is required")
+    cleaned = str(raw).strip()
+    if not cleaned:
+        raise ValidationError("Card number cannot be empty")
+    if not cleaned.isdigit():
+        raise ValidationError("Card number must contain only digits")
+    if len(cleaned) not in VALID_CARD_LENGTHS:
+        raise ValidationError(
+            f"Card number must be {' or '.join(map(str, VALID_CARD_LENGTHS))} digits"
+        )
+    return cleaned
 
 
 def parse_checkout_prefix(raw: str | None) -> tuple[str, int]:

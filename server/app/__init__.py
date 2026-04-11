@@ -107,11 +107,12 @@ def create_app(config_name: str | None = None) -> Flask:
 
     # Register blueprints (added in batch 3)
     try:
-        from .routes import checkouts, patrons, receipts
+        from .routes import books, checkouts, patrons, receipts
 
         app.register_blueprint(patrons.bp)
         app.register_blueprint(checkouts.bp)
         app.register_blueprint(receipts.bp)
+        app.register_blueprint(books.bp)
     except ImportError:
         app.logger.warning("Route blueprints not yet available; skipping.")
 
@@ -145,6 +146,29 @@ def create_app(config_name: str | None = None) -> Flask:
         from flask import render_template
 
         return render_template("register.html")
+
+    @app.route("/add-book")
+    def add_book_page():
+        """Render the add-book catalog page."""
+        from flask import render_template
+
+        return render_template("add_book.html")
+
+    @app.route("/stats")
+    def stats_page():
+        """Render the library statistics dashboard."""
+        from flask import render_template
+
+        return render_template("stats.html")
+
+    @app.route("/api/stats")
+    def stats_api():
+        """Return aggregate library statistics as JSON."""
+        from flask import jsonify
+
+        from .services import checkout_service
+
+        return jsonify(checkout_service.library_stats())
 
     @app.route("/api/health")
     def health():

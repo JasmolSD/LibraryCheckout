@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 
 from flask import current_app
+from sqlalchemy import func
 
 from ..database import db
 from ..models import Book, Checkout, Patron
@@ -18,6 +19,25 @@ from .validators import (
 def _utcnow() -> datetime:
     """Return current UTC time as a naive datetime (SQLite-compatible)."""
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def next_card_number() -> str:
+    """Return the next sequential 14-digit library card number.
+
+    Scans all existing card numbers numerically and returns max + 1,
+    starting from ``10000000000001`` when no patrons exist yet.
+    """
+    base = 10_000_000_000_001
+    rows = db.session.query(Patron.card_number).all()
+    max_num = base - 1
+    for (c,) in rows:
+        try:
+            n = int(c)
+            if n > max_num:
+                max_num = n
+        except (ValueError, TypeError):
+            continue
+    return str(max_num + 1)
 
 
 def get_or_create_patron(
@@ -70,6 +90,79 @@ def get_or_create_patron(
     db.session.commit()
     current_app.logger.info("Registered new patron %s", patron.masked_card)
     return patron
+
+
+def add_book_to_catalog(
+    barcode: str,
+    title: str | None = None,
+    author: str | None = None,
+    category: str = "book",
+) -> Book:
+    """Add a new item to the catalog without checking it out.
+
+    Args:
+        barcode: Raw ISBN or library barcode (validated internally).
+        title: Optional item title.
+        author: Optional author name.
+        category: Item category (default ``"book"``).
+
+    Returns:
+        The newly-created :class:`~server.app.models.Book`.
+
+    Raises:
+        ValidationError: If the barcode is invalid or already exists.
+    """
+    barcode = validate_barcode(barcode)
+    if Book.query.filter_by(barcode=barcode).first():
+        raise ValidationError(f"Item {barcode} is already in the catalog")
+    book = Book(
+        barcode=barcode,
+        title=title.strip() if title and title.strip() else None,
+        author=author.strip() if author and author.strip() else None,
+        category=category or "book",
+    )
+    db.session.add(book)
+    db.session.commit()
+    current_app.logger.info("Added to catalog: %s", barcode)
+    return book
+
+
+def overdue_items() -> list[dict]:
+    """Return all currently overdue checkouts with patron and book details.
+
+    Returns:
+        List of dicts, each containing patron name, card info, book info,
+        due date, and days overdue, ordered by most overdue first.
+    """
+    now = _utcnow()
+    rows = (
+        Checkout.query.filter(
+            Checkout.action == "checkout",
+            Checkout.returned_at.is_(None),
+            Checkout.due_date < now,
+        )
+        .join(Patron, Checkout.patron_id == Patron.id)
+        .join(Book, Checkout.book_id == Book.id)
+        .order_by(Checkout.due_date.asc())
+        .all()
+    )
+    result = []
+    for co in rows:
+        days = (now - co.due_date).days
+        result.append(
+            {
+                "patron_name": co.patron.name,
+                "card_number": co.patron.card_number,
+                "card_masked": co.patron.masked_card,
+                "book_title": co.book.title or "(untitled)",
+                "barcode": co.book.barcode,
+                "category": co.book.category,
+                "checked_out_at": co.checked_out_at.isoformat(),
+                "due_date": co.due_date.isoformat(),
+                "days_overdue": days,
+            }
+        )
+    return result
 
 
 def get_or_create_book(barcode: str, title: str | None = None, category: str = "book") -> Book:
@@ -216,6 +309,77 @@ def renew_item(barcode: str, loan_days: int = 14) -> Checkout:
     db.session.commit()
     current_app.logger.info("Renew: book=%s loan_days=%d", barcode, loan_days)
     return active
+
+
+def library_stats() -> dict:
+    """Aggregate library-wide statistics for the dashboard.
+
+    Returns:
+        Dictionary with counts, breakdowns, and a top-books list.
+    """
+    now = _utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = now - timedelta(days=7)
+
+    total_patrons = Patron.query.count()
+    total_books = Book.query.count()
+
+    active_checkouts = Checkout.query.filter(
+        Checkout.action == "checkout", Checkout.returned_at.is_(None)
+    ).count()
+
+    overdue_items = Checkout.query.filter(
+        Checkout.action == "checkout",
+        Checkout.returned_at.is_(None),
+        Checkout.due_date < now,
+    ).count()
+
+    total_checkout_events = Checkout.query.filter_by(action="checkout").count()
+
+    checkouts_today = Checkout.query.filter(
+        Checkout.action == "checkout",
+        Checkout.checked_out_at >= today_start,
+    ).count()
+
+    checkouts_this_week = Checkout.query.filter(
+        Checkout.action == "checkout",
+        Checkout.checked_out_at >= week_start,
+    ).count()
+
+    by_category = (
+        db.session.query(Book.category, func.count(Checkout.id))
+        .join(Checkout, Checkout.book_id == Book.id)
+        .filter(Checkout.action == "checkout", Checkout.returned_at.is_(None))
+        .group_by(Book.category)
+        .order_by(func.count(Checkout.id).desc())
+        .all()
+    )
+
+    top_books = (
+        db.session.query(Book.title, Book.barcode, func.count(Checkout.id).label("cnt"))
+        .join(Checkout, Checkout.book_id == Book.id)
+        .filter(Checkout.action == "checkout")
+        .group_by(Book.id)
+        .order_by(func.count(Checkout.id).desc())
+        .limit(5)
+        .all()
+    )
+
+    return {
+        "total_patrons": total_patrons,
+        "total_books": total_books,
+        "active_checkouts": active_checkouts,
+        "overdue_items": overdue_items,
+        "total_checkout_events": total_checkout_events,
+        "checkouts_today": checkouts_today,
+        "checkouts_this_week": checkouts_this_week,
+        "by_category": [{"category": c, "count": n} for c, n in by_category],
+        "top_books": [
+            {"title": t or barcode, "barcode": barcode, "checkouts": n}
+            for t, barcode, n in top_books
+        ],
+        "generated_at": now.isoformat(),
+    }
 
 
 def search_patrons(query: str) -> list[Patron]:

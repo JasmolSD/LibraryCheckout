@@ -16,6 +16,16 @@ from ..services.validators import ValidationError
 bp = Blueprint("patrons", __name__, url_prefix="/api/patrons")
 
 
+@bp.get("/next-card")
+def next_card():
+    """Return the next auto-generated 14-digit library card number.
+
+    Returns:
+        200 with ``{"card_number": "<14-digit string>"}``
+    """
+    return jsonify({"card_number": checkout_service.next_card_number()})
+
+
 @bp.get("/search")
 def search_patrons():
     """Search patrons by first or last name.

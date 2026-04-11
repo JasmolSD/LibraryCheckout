@@ -11,6 +11,17 @@ from ..services.validators import ValidationError
 bp = Blueprint("checkouts", __name__, url_prefix="/api/checkouts")
 
 
+@bp.get("/overdue")
+def overdue():
+    """Return all currently overdue checkouts with patron and book details.
+
+    Returns:
+        200 with ``{"overdue": [...], "count": N}``
+    """
+    items = checkout_service.overdue_items()
+    return jsonify({"overdue": items, "count": len(items)})
+
+
 @bp.post("/")
 def checkout():
     """Check out a single item to a patron.

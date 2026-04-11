@@ -84,6 +84,18 @@
                           {% else %}text-indigo-200 hover:bg-white/10 hover:text-white{% endif %}">
                     Register
                 </a>
+                <a href="/add-book"
+                   class="px-3 py-1.5 rounded-lg transition-colors
+                          {% if request.endpoint == 'add_book_page' %}bg-white/20 text-white
+                          {% else %}text-indigo-200 hover:bg-white/10 hover:text-white{% endif %}">
+                    Add Book
+                </a>
+                <a href="/stats"
+                   class="px-3 py-1.5 rounded-lg transition-colors
+                          {% if request.endpoint == 'stats_page' %}bg-white/20 text-white
+                          {% else %}text-indigo-200 hover:bg-white/10 hover:text-white{% endif %}">
+                    Stats
+                </a>
                 <a href="/help"
                    class="px-3 py-1.5 rounded-lg transition-colors
                           {% if request.endpoint == 'help_page' %}bg-white/20 text-white

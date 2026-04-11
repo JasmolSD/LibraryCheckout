@@ -6,6 +6,9 @@ Ported from a legacy Excel/VBA workflow to a modern Flask + pywebview stack.
 ## Features
 
 - **Library card scanning** — look up patrons instantly; new-patron registration via inline modal (no `prompt()`)
+- **Auto-generated card numbers** — registration page assigns the next sequential 14-digit library card automatically; no manual entry required
+- **Catalog management** — dedicated Add Book page: scan an ISBN to auto-fill title, author, and category via Google Books; supports ISBN-10, ISBN-13, and 14-digit library barcodes
+- **Statistics dashboard** — at-a-glance counts (patrons, catalog size, active checkouts, overdue items); click the overdue tile to expand a full list showing patron name, card number, book, barcode, and days overdue
 - **Loan period selector** — choose 1, 2, or 3 weeks per checkout or renewal; defaults to 2 weeks
 - **Checkout / Return / Renew** — colour-coded action tabs with loading states and toast notifications
 - **PDF receipt generation** — ReportLab-based receipt printed directly from the browser
@@ -75,6 +78,9 @@ docker run -p 5000:5000 library-checkout
 |---|---|
 | `/` | Main checkout screen |
 | `/history` | Patron transaction history |
+| `/register` | New patron registration (card number auto-generated) |
+| `/add-book` | Add items to the catalog with ISBN auto-fill |
+| `/stats` | Library statistics dashboard with overdue detail |
 | `/help` | User guide & FAQ |
 | `/api/health` | Health-check JSON |
 
@@ -84,13 +90,23 @@ docker run -p 5000:5000 library-checkout
 
 | Method | Path | Description |
 |---|---|---|
+| `GET` | `/api/patrons/next-card` | Next auto-generated 14-digit card number |
+| `GET` | `/api/patrons/search?q=` | Search patrons by name |
 | `GET` | `/api/patrons/<card>` | Patron summary + active items + history |
 | `POST` | `/api/patrons/` | Register a new patron |
+
+### Books
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/books/lookup?isbn=` | Fetch title/author/category from Google Books |
+| `POST` | `/api/books/` | Add an item to the catalog |
 
 ### Checkouts
 
 | Method | Path | Description |
 |---|---|---|
+| `GET` | `/api/checkouts/overdue` | All overdue checkouts with patron & book details |
 | `POST` | `/api/checkouts/` | Check out an item |
 | `POST` | `/api/checkouts/return` | Return an item |
 | `POST` | `/api/checkouts/renew` | Renew an item |
@@ -100,6 +116,12 @@ docker run -p 5000:5000 library-checkout
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/receipts/<card>` | PDF receipt of active checkouts |
+
+### Stats
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/stats` | Aggregate library statistics (patrons, catalog, activity, top books) |
 
 ## Customising the UI
 
@@ -171,8 +193,9 @@ library-checkout/
 │   │   ├── database.py         # SQLAlchemy instance
 │   │   ├── models.py           # Patron, Book, Checkout ORM models
 │   │   ├── routes/
-│   │   │   ├── patrons.py      # GET /api/patrons, POST /api/patrons/
-│   │   │   ├── checkouts.py    # POST /api/checkouts/{,return,renew}
+│   │   │   ├── patrons.py      # GET /api/patrons, POST /api/patrons/, GET /api/patrons/next-card
+│   │   │   ├── checkouts.py    # POST /api/checkouts/{,return,renew}, GET /api/checkouts/overdue
+│   │   │   ├── books.py        # GET /api/books/lookup, POST /api/books/
 │   │   │   └── receipts.py     # GET /api/receipts/<card>
 │   │   ├── services/
 │   │   │   ├── checkout_service.py  # Core business logic
@@ -190,11 +213,15 @@ library-checkout/
 │   │   ├── base.html           # Layout shell (header, nav, footer, background)
 │   │   ├── index.html          # Checkout screen
 │   │   ├── history.html        # Patron history viewer
+│   │   ├── register.html       # New-patron registration (auto-generated card)
+│   │   ├── add_book.html       # Add item to catalog with ISBN auto-fill
+│   │   ├── stats.html          # Library statistics dashboard
 │   │   └── help.html           # User guide & FAQ
 │   └── static/
 │       ├── css/styles.css      # Design system (fonts, animations, components)
 │       ├── js/
 │       │   ├── app.js          # Checkout screen Alpine.js component
+│       │   ├── register.js     # Registration page Alpine.js component
 │       │   └── patron.js       # History page Alpine.js component
 │       └── images/             # Drop background.* / icon.* here to customise
 ├── data/                       # SQLite database — gitignored

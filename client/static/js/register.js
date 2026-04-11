@@ -2,8 +2,8 @@
  * register.js — New-patron registration page Alpine.js component.
  *
  * Handles the full patron registration form:
- *   • Pre-fills the card number from the `?card=` URL parameter (set when the
- *     checkout screen detects an unknown card and links here)
+ *   • Auto-fetches the next available card number from /api/patrons/next-card
+ *     (or pre-fills from `?card=` when redirected from the checkout screen)
  *   • Validates required fields client-side before submitting
  *   • POSTs to /api/patrons/ and redirects to /?card=<card> on success
  *
@@ -46,17 +46,26 @@ function registerApp() {
 
         /**
          * Alpine init hook.
-         * Pre-fills the card number input from the `?card=` URL parameter if present.
-         * Focuses the last-name field after the card is pre-filled.
+         * If a `?card=` URL parameter is present (scanned at checkout), uses that number.
+         * Otherwise fetches the next auto-generated card number from the server.
+         * Focuses the last-name field once the card is resolved.
          */
-        init() {
+        async init() {
             const params = new URLSearchParams(window.location.search);
             const card = params.get('card');
             if (card) {
                 this.form.card_number = card;
                 this.cardPreFilled = true;
-                this.$nextTick(() => document.getElementById('reg-last')?.focus());
+            } else {
+                try {
+                    const r = await fetch('/api/patrons/next-card');
+                    const data = await r.json();
+                    this.form.card_number = data.card_number ?? '';
+                } catch {
+                    this.errorMsg = 'Could not generate a card number. Please refresh.';
+                }
             }
+            this.$nextTick(() => document.getElementById('reg-last')?.focus());
         },
 
         // ── Form submission ───────────────────────────────────────
@@ -71,10 +80,6 @@ function registerApp() {
             this.errorMsg = '';
 
             // Client-side required-field validation
-            if (!this.form.card_number.trim()) {
-                this.errorMsg = 'Library card number is required.';
-                return;
-            }
             if (!this.form.last_name.trim()) {
                 this.errorMsg = 'Last name is required.';
                 return;
