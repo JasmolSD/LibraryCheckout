@@ -36,6 +36,7 @@ class Patron(_Base):
     email: Mapped[str | None] = mapped_column(String(120))
     phone: Mapped[str | None] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+    is_active: Mapped[bool] = mapped_column(default=True)
 
     loans: Mapped[list[Loan]] = relationship(back_populates="patron", cascade="all, delete-orphan")
 
@@ -61,6 +62,7 @@ class Patron(_Base):
             "email": self.email,
             "phone": self.phone,
             "created_at": self.created_at.isoformat(),
+            "is_active": self.is_active,
         }
 
 
@@ -74,6 +76,7 @@ class Book(_Base):
     # categories: book, dvd, audiobook, magazine, ebook, other
     category: Mapped[str] = mapped_column(String(40), default="book")
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+    is_active: Mapped[bool] = mapped_column(default=True)
 
     loans: Mapped[list[Loan]] = relationship(back_populates="book")
 
@@ -84,6 +87,7 @@ class Book(_Base):
             "title": self.title,
             "author": self.author,
             "category": self.category,
+            "is_active": self.is_active,
         }
 
 
@@ -132,33 +136,55 @@ class Loan(_Base):
 
 
 class Transaction(_Base):
-    """Immutable audit trail — one row per checkout, return, or renew event."""
+    """Immutable audit trail — one row per system event.
+
+    Loan-level actions (checkout, return, renew) set ``loan_id``.
+    Entity-level actions (archive_patron, reactivate_patron,
+    archive_book, reactivate_book) set ``patron_id`` or ``book_id``.
+    """
 
     __tablename__ = "transactions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    loan_id: Mapped[int] = mapped_column(ForeignKey("loans.id"), index=True)
-    # action: checkout | return | renew
-    action: Mapped[str] = mapped_column(String(20))
+    loan_id: Mapped[int | None] = mapped_column(ForeignKey("loans.id"), index=True)
+    patron_id: Mapped[int | None] = mapped_column(ForeignKey("patrons.id"), index=True)
+    book_id: Mapped[int | None] = mapped_column(ForeignKey("books.id"), index=True)
+    action: Mapped[str] = mapped_column(String(30))
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
 
-    loan: Mapped[Loan] = relationship(back_populates="transactions")
+    loan: Mapped[Loan | None] = relationship(back_populates="transactions")
 
     def to_dict(self) -> dict:
-        return {
+        result: dict = {
             "id": self.id,
             "loan_id": self.loan_id,
             "action": self.action,
             "created_at": self.created_at.isoformat(),
-            "barcode": self.loan.book.barcode if self.loan and self.loan.book else None,
-            "title": self.loan.book.title if self.loan and self.loan.book else None,
-            "category": self.loan.book.category if self.loan and self.loan.book else None,
-            "checked_out_at": self.loan.checked_out_at.isoformat() if self.loan else None,
-            "due_date": (
-                self.loan.due_date.isoformat() if self.loan and self.loan.due_date else None
-            ),
-            "returned_at": (
-                self.loan.returned_at.isoformat() if self.loan and self.loan.returned_at else None
-            ),
-            "is_late": self.loan.is_late if self.loan else False,
         }
+        if self.loan:
+            result.update(
+                {
+                    "barcode": self.loan.book.barcode if self.loan.book else None,
+                    "title": self.loan.book.title if self.loan.book else None,
+                    "category": self.loan.book.category if self.loan.book else None,
+                    "checked_out_at": self.loan.checked_out_at.isoformat(),
+                    "due_date": (self.loan.due_date.isoformat() if self.loan.due_date else None),
+                    "returned_at": (
+                        self.loan.returned_at.isoformat() if self.loan.returned_at else None
+                    ),
+                    "is_late": self.loan.is_late,
+                }
+            )
+        else:
+            result.update(
+                {
+                    "barcode": None,
+                    "title": None,
+                    "category": None,
+                    "checked_out_at": None,
+                    "due_date": None,
+                    "returned_at": None,
+                    "is_late": False,
+                }
+            )
+        return result

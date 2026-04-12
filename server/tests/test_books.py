@@ -1,7 +1,73 @@
-"""Tests for book catalog endpoints and the next-card patron endpoint."""
+"""Tests for book catalog endpoints, book details, and the next-card patron endpoint."""
 
 import json
 from unittest.mock import MagicMock, patch
+
+# ── GET /api/books/<barcode> ─────────────────────────────────────────────────
+
+
+class TestGetBook:
+    def test_get_book_details(self, client):
+        client.post(
+            "/api/books/",
+            json={"barcode": "9780451524935", "title": "1984", "author": "George Orwell"},
+        )
+        r = client.get("/api/books/9780451524935")
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["barcode"] == "9780451524935"
+        assert data["title"] == "1984"
+        assert data["author"] == "George Orwell"
+        assert data["is_active"] is True
+        assert data["checked_out"] is False
+
+    def test_get_book_unknown_barcode(self, client):
+        r = client.get("/api/books/0000000000")
+        assert r.status_code == 400
+        assert "Unknown" in r.get_json()["error"]
+
+    def test_get_book_invalid_barcode(self, client):
+        r = client.get("/api/books/abc")
+        assert r.status_code == 400
+
+    def test_get_book_shows_checked_out_status(self, client, patron):
+        client.post(
+            "/api/checkouts/",
+            json={"card_number": "1234567890", "barcode": "9780451524935", "title": "1984"},
+        )
+        r = client.get("/api/books/9780451524935")
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["checked_out"] is True
+        assert data["checked_out_to"] == "DOE, JANE"
+        assert data["checked_out_card"] == "1234567890"
+        assert data["due_date"] is not None
+
+    def test_get_book_not_checked_out_after_return(self, client, patron):
+        client.post(
+            "/api/checkouts/",
+            json={"card_number": "1234567890", "barcode": "9780451524935"},
+        )
+        client.post("/api/checkouts/return", json={"barcode": "9780451524935"})
+        r = client.get("/api/books/9780451524935")
+        data = r.get_json()
+        assert data["checked_out"] is False
+
+    def test_get_book_shows_archived_status(self, client):
+        client.post("/api/books/", json={"barcode": "9780451524935"})
+        client.post("/api/books/9780451524935/archive")
+        r = client.get("/api/books/9780451524935")
+        assert r.get_json()["is_active"] is False
+
+    def test_get_book_response_includes_required_fields(self, client):
+        client.post(
+            "/api/books/",
+            json={"barcode": "9780451524935", "title": "1984", "category": "book"},
+        )
+        data = client.get("/api/books/9780451524935").get_json()
+        required = {"id", "barcode", "title", "author", "category", "is_active", "checked_out"}
+        assert required.issubset(data.keys())
+
 
 # ── POST /api/books/ ─────────────────────────────────────────────────────────
 
@@ -41,6 +107,7 @@ class TestAddBook:
         assert data["title"] is None
         assert data["author"] is None
         assert data["category"] == "book"
+        assert data["is_active"] is True
 
     def test_add_book_explicit_category(self, client):
         r = client.post(

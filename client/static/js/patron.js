@@ -43,6 +43,10 @@ function historyApp() {
         /** True after at least one name search has been attempted. */
         nameSearched: false,
 
+        /** True briefly when a non-digit is typed into the card field. */
+        cardInvalid: false,
+        _cardInvalidTimer: null,
+
         // ── Lifecycle ────────────────────────────────────────────
 
         /**
@@ -56,6 +60,26 @@ function historyApp() {
             if (c) {
                 this.card = c;
                 this.load();
+            }
+        },
+
+        // ── Numeric input sanitiser ───────────────────────────────
+
+        /**
+         * Strip non-digit characters from the card input.
+         * Flashes the invalid flag for 2.5s if any were stripped.
+         *
+         * @param {InputEvent} event - The input event.
+         */
+        sanitizeCard(event) {
+            const raw = event.target.value;
+            const clean = raw.replace(/\D/g, '').slice(0, 14);
+            this.card = clean;
+            if (event.target.value !== clean) event.target.value = clean;
+            if (raw !== clean) {
+                this.cardInvalid = true;
+                clearTimeout(this._cardInvalidTimer);
+                this._cardInvalidTimer = setTimeout(() => { this.cardInvalid = false; }, 2500);
             }
         },
 
@@ -134,6 +158,33 @@ function historyApp() {
             this.nameResults = [];
             this.nameSearched = false;
             this.load();
+        },
+
+        // ── Return items ──────────────────────────────────────────
+
+        /**
+         * Return a single item from the active-items list.
+         * Calls the return API and reloads the patron data.
+         *
+         * @param {string} barcode - The barcode of the item to return.
+         * @returns {Promise<void>}
+         */
+        async returnItem(barcode) {
+            try {
+                const r = await fetch('/api/checkouts/return', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ barcode }),
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    this.errMsg = data.error || 'Return failed';
+                    return;
+                }
+                await this.load();
+            } catch (e) {
+                this.errMsg = e.message;
+            }
         },
 
         // ── Filtering ─────────────────────────────────────────────
