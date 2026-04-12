@@ -16,21 +16,37 @@
         </div>
 
         <!-- Card number lookup -->
-        <div class="flex gap-2 mb-4">
-            <input x-model="card"
-                   @keydown.enter="load()"
-                   type="text"
-                   placeholder="Scan or enter library card number"
-                   autofocus
-                   class="flex-1 border border-slate-300 rounded-lg px-3 py-2.5 font-mono text-sm
-                          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-            <button @click="load()"
-                    :disabled="loading"
-                    class="bg-indigo-600 text-white px-5 rounded-lg hover:bg-indigo-700 font-medium text-sm
-                           transition-colors flex items-center gap-2 disabled:opacity-50">
-                <span x-show="loading" class="spinner"></span>
-                <span>Load</span>
-            </button>
+        <div class="mb-4">
+            <div class="flex gap-2">
+                <input x-model="card"
+                       @input="sanitizeCard($event)"
+                       @keydown.enter="load()"
+                       type="text"
+                       inputmode="numeric"
+                       maxlength="14"
+                       placeholder="Scan or enter library card number"
+                       autofocus
+                       class="flex-1 rounded-lg px-3 py-2.5 font-mono text-sm border
+                              focus:ring-2 focus:border-indigo-500"
+                       :class="cardInvalid
+                           ? 'border-rose-400 ring-1 ring-rose-300 focus:ring-rose-400'
+                           : 'border-slate-300 focus:ring-indigo-500'" />
+                <button @click="load()"
+                        :disabled="loading"
+                        class="bg-indigo-600 text-white px-5 rounded-lg hover:bg-indigo-700 font-medium text-sm
+                               transition-colors flex items-center gap-2 disabled:opacity-50">
+                    <span x-show="loading" class="spinner"></span>
+                    <span>Load</span>
+                </button>
+            </div>
+            <p x-show="cardInvalid"
+               x-transition
+               class="text-xs text-rose-600 mt-1">
+                Only numerical values allowed (e.g. 1, 3, 35434)
+            </p>
+            <p x-show="!cardInvalid" class="text-xs text-slate-400 mt-1">
+                Library card numbers are up to 14 digits.
+            </p>
         </div>
         <!-- Inline error message -->
         <p x-show="errMsg"

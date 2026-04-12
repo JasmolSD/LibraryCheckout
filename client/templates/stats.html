@@ -248,8 +248,21 @@
 {% block scripts %}
 <script>
 function statsApp() {
+    /** Default zero-filled stats so an empty database still renders cleanly. */
+    const emptyStats = () => ({
+        total_patrons:         0,
+        total_books:           0,
+        active_checkouts:      0,
+        overdue_items:         0,
+        total_checkout_events: 0,
+        checkouts_today:       0,
+        checkouts_this_week:   0,
+        by_category:           [],
+        top_books:             [],
+    });
+
     return {
-        stats: {},
+        stats: emptyStats(),
         loading: false,
         errorMsg: '',
         generatedAt: '',
@@ -276,13 +289,21 @@ function statsApp() {
                 const r = await fetch(url);
                 if (!r.ok) throw new Error('Server error');
                 const data = await r.json();
-                this.stats = data;
+                // Merge response over defaults so any missing field falls back to 0 / [].
+                this.stats = { ...emptyStats(), ...data };
                 if (data.generated_at) {
                     const d = new Date(data.generated_at + 'Z');
                     this.generatedAt = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 }
             } catch (e) {
-                this.errorMsg = 'Could not load statistics. Please try refreshing.';
+                // Genuine fetch failure — keep the zero-filled defaults so the
+                // grid still renders. Only surface the warning when the user
+                // explicitly asked for a refresh, so a first-time empty DB
+                // never displays a false error.
+                this.stats = emptyStats();
+                if (refresh) {
+                    this.errorMsg = 'Could not load statistics. Please try refreshing.';
+                }
             } finally {
                 this.loading = false;
             }

@@ -33,6 +33,13 @@ function checkoutApp() {
         /** Card number that was looked up but not found (triggers register link). */
         notFoundCard: '',
 
+        /** True briefly when a non-digit is typed into the card field. */
+        cardInputInvalid: false,
+        /** True briefly when a non-digit is typed into the barcode field. */
+        itemInputInvalid: false,
+        _cardInvalidTimer: null,
+        _itemInvalidTimer: null,
+
         // ── Loan period state ────────────────────────────────────
         /** Preset selection: '1' | '2' | '3' | 'custom'. */
         loanPreset: '2',
@@ -75,6 +82,30 @@ function checkoutApp() {
             if (card) {
                 this.cardInput = card;
                 this.lookupPatron();
+            }
+        },
+
+        // ── Numeric input sanitiser ───────────────────────────────
+
+        /**
+         * Strip non-digit characters from a numeric input (card / barcode).
+         * If any non-digits were stripped, flashes the invalid flag for 2.5s.
+         *
+         * @param {InputEvent} event - The input event.
+         * @param {'cardInput'|'itemInput'} key - The field to update.
+         * @param {number} max - Maximum allowed length.
+         */
+        sanitizeNumeric(event, key, max) {
+            const raw = event.target.value;
+            const clean = raw.replace(/\D/g, '').slice(0, max);
+            this[key] = clean;
+            if (event.target.value !== clean) event.target.value = clean;
+            const flagKey = key === 'cardInput' ? 'cardInputInvalid' : 'itemInputInvalid';
+            const timerKey = key === 'cardInput' ? '_cardInvalidTimer' : '_itemInvalidTimer';
+            if (raw !== clean) {
+                this[flagKey] = true;
+                clearTimeout(this[timerKey]);
+                this[timerKey] = setTimeout(() => { this[flagKey] = false; }, 2500);
             }
         },
 
