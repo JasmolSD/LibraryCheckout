@@ -183,9 +183,15 @@ def create_app(config_name: str | None = None) -> Flask:
         """
         return {"status": "ok", "branch": app.config["LIBRARY_BRANCH"]}
 
-    # Create tables on first run
+    # Create tables on first run, then apply any additive column migrations
+    # so end users upgrading an older library.db don't hit "no such column".
     with app.app_context():
         db.create_all()
+        from .utils.schema import ensure_schema
+
+        added = ensure_schema(db.engine, db.metadata)
+        if added:
+            app.logger.info("Schema migration: added columns %s", ", ".join(added))
         app.logger.info("Application initialized (env=%s)", app.config["ENV"])
 
     return app

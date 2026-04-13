@@ -253,10 +253,34 @@ built by the `release.yml` workflow.  End users:
 
 1. Download `LibraryCheckout.exe` from the latest release.
 2. Double-click it — no Python, no uv, no installation required.
-3. A `data/` folder is created next to the `.exe` on first run to store the database.
+3. A `data/` folder is created **next to the `.exe`** on first run to store
+   the SQLite database.  Keep the `.exe` in a stable location (e.g.
+   `C:\LibraryCheckout\`) so the `data/` folder accumulates there.
 
 > **Note:** Windows may show a SmartScreen warning the first time because the binary
 > is not code-signed.  Click **More info → Run anyway**.
+
+### Updating without losing data
+
+The database lives in `data/library.db` **alongside** `LibraryCheckout.exe`,
+not inside it.  To upgrade:
+
+1. Download the new `LibraryCheckout.exe` from the latest release.
+2. Replace the old `.exe` in the same folder — leave `data/` untouched.
+3. Launch the new version.  On first start it will:
+   - create any tables that are new in this release (`db.create_all()`),
+   - run an **additive schema migration** that adds any new columns to
+     existing tables (for example, a new `total_copies` on `books`), and
+   - preserve all existing patrons, books, loans, and transaction history.
+
+The additive migration ([`server/app/utils/schema.py`](server/app/utils/schema.py))
+only **adds** new columns — it never drops or renames. If a release ever
+ships a destructive schema change, the release notes will call it out and
+link to a one-off migration script.
+
+> **Backing up first is always a good idea.**  Copy `data/library.db` to a
+> safe location before replacing the `.exe`.  If anything goes wrong you
+> can roll back to the previous `.exe` and restore the backup.
 
 ### Option B — Double-click launcher (for developers)
 

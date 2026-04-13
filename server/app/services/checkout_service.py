@@ -409,8 +409,10 @@ def library_stats(*, force: bool = False) -> dict:
     week_start = now - timedelta(days=7)
 
     total_patrons = Patron.query.count()
-    # Count of unique book rows (distinct titles / barcodes)
+    # Count of unique book rows (distinct titles / barcodes, incl. archived)
     total_books = Book.query.count()
+    # Count of unique book rows that are currently active (not archived)
+    active_titles = Book.query.filter(Book.is_active.is_(True)).count()
     # Sum of physical copies across the whole catalog
     total_copies = db.session.query(func.coalesce(func.sum(Book.total_copies), 0)).scalar() or 0
 
@@ -454,6 +456,7 @@ def library_stats(*, force: bool = False) -> dict:
     result = {
         "total_patrons": total_patrons,
         "total_books": total_books,
+        "active_titles": active_titles,
         "total_copies": int(total_copies),
         "active_checkouts": active_checkouts,
         "overdue_items": overdue_count,

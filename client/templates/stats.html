@@ -38,7 +38,7 @@
     </div>
 
     <!-- ── Key metrics grid ─────────────────────────────────── -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
 
         <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-4">
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Patrons</p>
@@ -50,6 +50,12 @@
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Unique Titles</p>
             <p class="text-3xl font-bold text-indigo-600" x-text="stats.total_books ?? '—'"></p>
             <p class="text-xs text-slate-400 mt-1">distinct catalog entries</p>
+        </div>
+
+        <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-4">
+            <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Active Titles</p>
+            <p class="text-3xl font-bold text-indigo-600" x-text="stats.active_titles ?? '—'"></p>
+            <p class="text-xs text-slate-400 mt-1">not archived</p>
         </div>
 
         <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-4">
@@ -258,6 +264,7 @@ function statsApp() {
     const emptyStats = () => ({
         total_patrons:         0,
         total_books:           0,
+        active_titles:         0,
         total_copies:          0,
         active_checkouts:      0,
         overdue_items:         0,

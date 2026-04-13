@@ -14,13 +14,30 @@ Usage::
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+def _project_root() -> Path:
+    """Return the directory where ``data/`` and ``logs/`` should live.
+
+    When running from source, this is the repo root — two levels above
+    this file.  When running as a PyInstaller one-file bundle, ``__file__``
+    points inside a temporary extraction directory that is wiped on exit,
+    so we use the folder containing the ``.exe`` instead.  That folder
+    persists across launches and across binary upgrades, so the SQLite
+    database survives when the user replaces the executable.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[2]
+
+
+PROJECT_ROOT = _project_root()
 
 
 class BaseConfig:
