@@ -147,12 +147,12 @@ def create_app(config_name: str | None = None) -> Flask:
 
         return render_template("register.html")
 
-    @app.route("/books")
-    def books_page():
-        """Render the books catalog and management page."""
+    @app.route("/catalog")
+    def catalog_page():
+        """Render the catalog search and management page."""
         from flask import render_template
 
-        return render_template("books.html")
+        return render_template("catalog.html")
 
     @app.route("/stats")
     def stats_page():

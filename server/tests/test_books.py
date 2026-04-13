@@ -3,6 +3,113 @@
 import json
 from unittest.mock import MagicMock, patch
 
+# ── GET /api/books/search ────────────────────────────────────────────────────
+
+
+class TestSearchBooks:
+    def _seed(self, client):
+        client.post(
+            "/api/books/",
+            json={
+                "barcode": "9780451524935",
+                "title": "Nineteen Eighty-Four",
+                "author": "George Orwell",
+            },
+        )
+        client.post(
+            "/api/books/",
+            json={
+                "barcode": "9780451524936",
+                "title": "Animal Farm",
+                "author": "George Orwell",
+            },
+        )
+        client.post(
+            "/api/books/",
+            json={
+                "barcode": "4560000340000",
+                "title": "The Great Gatsby",
+                "author": "F. Scott Fitzgerald",
+            },
+        )
+        client.post(
+            "/api/books/",
+            json={
+                "barcode": "4560000340001",
+                "title": "Tender Is the Night",
+                "author": "F. Scott Fitzgerald",
+            },
+        )
+
+    def test_search_missing_q_returns_400(self, client):
+        r = client.get("/api/books/search")
+        assert r.status_code == 400
+
+    def test_search_by_barcode_prefix(self, client):
+        self._seed(client)
+        r = client.get("/api/books/search?q=978045152")
+        assert r.status_code == 200
+        results = r.get_json()
+        barcodes = {b["barcode"] for b in results}
+        assert "9780451524935" in barcodes
+        assert "9780451524936" in barcodes
+
+    def test_search_by_title_contains(self, client):
+        self._seed(client)
+        r = client.get("/api/books/search?q=Gatsby")
+        results = r.get_json()
+        assert any(b["barcode"] == "4560000340000" for b in results)
+
+    def test_search_by_author_contains(self, client):
+        self._seed(client)
+        r = client.get("/api/books/search?q=Orwell")
+        results = r.get_json()
+        assert len(results) >= 2
+        assert all("Orwell" in (b["author"] or "") for b in results)
+
+    def test_search_wildcard_barcode_prefix(self, client):
+        self._seed(client)
+        r = client.get("/api/books/search?q=456000034*")
+        results = r.get_json()
+        assert len(results) == 2
+        barcodes = {b["barcode"] for b in results}
+        assert "4560000340000" in barcodes
+        assert "4560000340001" in barcodes
+
+    def test_search_wildcard_excludes_title_author_matches(self, client):
+        """A trailing * suppresses title/author matching (strict barcode mode)."""
+        self._seed(client)
+        # 'Orwell' with a wildcard — no barcode starts with 'Orwell*' so 0 results
+        r = client.get("/api/books/search?q=Orwell*")
+        assert r.get_json() == []
+
+    def test_search_respects_limit(self, client):
+        self._seed(client)
+        r = client.get("/api/books/search?q=*&limit=2")
+        assert len(r.get_json()) == 2
+
+    def test_search_bare_star_returns_everything(self, client):
+        self._seed(client)
+        r = client.get("/api/books/search?q=*")
+        assert len(r.get_json()) == 4
+
+    def test_search_returns_archived_books_too(self, client):
+        self._seed(client)
+        client.post("/api/books/9780451524935/archive")
+        r = client.get("/api/books/search?q=Orwell")
+        results = r.get_json()
+        # Active results should come first
+        assert results[0]["is_active"] is True
+        # Archived one still appears
+        assert any(not b["is_active"] for b in results)
+
+    def test_search_no_match_returns_empty_list(self, client):
+        self._seed(client)
+        r = client.get("/api/books/search?q=zzznomatch")
+        assert r.status_code == 200
+        assert r.get_json() == []
+
+
 # ── GET /api/books/<barcode> ─────────────────────────────────────────────────
 
 
@@ -39,9 +146,16 @@ class TestGetBook:
         assert r.status_code == 200
         data = r.get_json()
         assert data["checked_out"] is True
-        assert data["checked_out_to"] == "DOE, JANE"
-        assert data["checked_out_card"] == "1234567890"
-        assert data["due_date"] is not None
+        assert len(data["active_loans"]) == 1
+        loan = data["active_loans"][0]
+        assert loan["patron_name"] == "DOE, JANE"
+        assert loan["card_number"] == "1234567890"
+        assert loan["copies_count"] == 1
+        assert len(loan["copies"]) == 1
+        assert loan["copies"][0]["due_date"] is not None
+        assert data["checked_out_count"] == 1
+        assert data["available_copies"] == 0
+        assert data["total_copies"] == 1
 
     def test_get_book_not_checked_out_after_return(self, client, patron):
         client.post(
@@ -65,8 +179,26 @@ class TestGetBook:
             json={"barcode": "9780451524935", "title": "1984", "category": "book"},
         )
         data = client.get("/api/books/9780451524935").get_json()
-        required = {"id", "barcode", "title", "author", "category", "is_active", "checked_out"}
+        required = {
+            "id",
+            "barcode",
+            "title",
+            "author",
+            "category",
+            "is_active",
+            "checked_out",
+            "created_at",
+            "total_copies",
+        }
         assert required.issubset(data.keys())
+
+    def test_get_book_created_at_is_iso(self, client):
+        client.post("/api/books/", json={"barcode": "9780451524935"})
+        data = client.get("/api/books/9780451524935").get_json()
+        assert data["created_at"] is not None
+        # ISO 8601 format starts with YYYY-MM-DDThh:mm:ss
+        assert len(data["created_at"]) >= 19
+        assert data["created_at"][4] == "-" and data["created_at"][10] == "T"
 
 
 # ── POST /api/books/ ─────────────────────────────────────────────────────────

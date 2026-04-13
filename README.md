@@ -7,7 +7,9 @@ Ported from a legacy Excel/VBA workflow to a modern Flask + pywebview stack.
 
 - **Library card scanning** — look up patrons instantly; new-patron registration via inline modal (no `prompt()`)
 - **Auto-generated card numbers** — registration page assigns the next sequential 14-digit library card automatically; no manual entry required
-- **Catalog management** — Books page with ISBN auto-fill via Google Books; Manage Existing Book panel for looking up items by barcode to return, archive, or reactivate them
+- **Catalog management** — Catalog page with ISBN auto-fill via Google Books for adding new items and an autofill search box (matches barcode prefix, title, or author) for managing existing ones; supports `barcode*` wildcard for prefix-only lookups
+- **Autofill book selection** — the checkout screen's item field shows a live dropdown of matching catalog entries (barcode · title · author) as you type
+- **Inventory / quantity tracking** — every book tracks total copies, available copies, and how many are checked out; a single book can be loaned to multiple patrons simultaneously, or one patron can hold multiple copies; Manage panel supports adding more copies, setting the total, and per-copy returns
 - **Statistics dashboard** — at-a-glance counts (patrons, catalog size, active checkouts, overdue items); click the overdue tile to expand a full list showing patron name, card number, book, barcode, and days overdue
 - **Loan period selector** — choose 1, 2, or 3 weeks per checkout or renewal; defaults to 2 weeks
 - **Checkout / Return / Renew** — colour-coded action tabs with loading states and toast notifications; per-item Return buttons on the checkout screen and history page for manual override returns
@@ -80,7 +82,7 @@ docker run -p 5000:5000 library-checkout
 | `/` | Main checkout screen |
 | `/history` | Patron transaction history |
 | `/register` | New patron registration (card number auto-generated) |
-| `/books` | Add items to catalog + manage existing books (return, archive, reactivate) |
+| `/catalog` | Search and manage existing books (return, archive, reactivate, adjust quantity) |
 | `/stats` | Library statistics dashboard with overdue detail |
 | `/help` | User guide & FAQ |
 | `/api/health` | Health-check JSON |
@@ -103,8 +105,10 @@ docker run -p 5000:5000 library-checkout
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/books/lookup?isbn=` | Fetch title/author/category from Google Books |
-| `GET` | `/api/books/<barcode>` | Book details including loan status |
-| `POST` | `/api/books/` | Add an item to the catalog |
+| `GET` | `/api/books/search?q=` | Search catalog by barcode prefix, title, or author — supports trailing `*` for strict barcode prefix (e.g. `456000034*`) |
+| `GET` | `/api/books/<barcode>` | Book details: inventory + loans aggregated by patron |
+| `POST` | `/api/books/` | Add an item to the catalog (accepts `quantity`) |
+| `POST` | `/api/books/<barcode>/quantity` | Set total copies (cannot drop below checked-out count) |
 | `POST` | `/api/books/<barcode>/archive` | Archive (soft-delete) a book |
 | `POST` | `/api/books/<barcode>/reactivate` | Reactivate an archived book |
 
@@ -224,7 +228,7 @@ library-checkout/
 │   │   ├── index.html          # Checkout screen
 │   │   ├── history.html        # Patron history viewer
 │   │   ├── register.html       # New-patron registration (auto-generated card)
-│   │   ├── books.html          # Books catalog and management page
+│   │   ├── catalog.html        # Catalog search and management page
 │   │   ├── stats.html          # Library statistics dashboard
 │   │   └── help.html           # User guide & FAQ
 │   └── static/

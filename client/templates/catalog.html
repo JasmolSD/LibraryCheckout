@@ -1,0 +1,554 @@
+{% extends "base.html" %}
+{% block title %}Catalog{% endblock %}
+
+{% block content %}
+<div x-data="catalogApp()" x-init="init()" class="max-w-2xl mx-auto">
+
+    <!-- ══ Search / manage ═══════════════════════════════════════ -->
+    <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-6">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between gap-3 mb-5">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <svg class="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="font-bold text-lg text-slate-900">Search Catalog</h2>
+                    <p class="text-sm text-slate-400">Find books by barcode, title, or author.</p>
+                </div>
+            </div>
+            <a href="/register?tab=book"
+               class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700
+                      transition-colors font-medium flex-shrink-0">
+                + Add Book
+            </a>
+        </div>
+
+        <!-- Search -->
+        <div class="mb-3">
+            <div class="flex gap-2">
+                <input x-model="query"
+                       @input="onQueryInput()"
+                       @keydown.enter.prevent="runSearch()"
+                       type="text"
+                       placeholder="Search barcode, title, or author — use e.g. 456000034*"
+                       autocomplete="off"
+                       class="flex-1 border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-mono
+                              focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                <button @click="runSearch()"
+                        :disabled="searching || !query.trim()"
+                        class="bg-indigo-600 text-white px-5 rounded-lg hover:bg-indigo-700 font-medium text-sm
+                               transition-colors flex items-center gap-2 disabled:opacity-50">
+                    <span x-show="searching" class="spinner"></span>
+                    <span>Search</span>
+                </button>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">
+                Tip: append <code class="font-mono bg-slate-100 px-1 rounded">*</code> to a barcode
+                prefix to match everything starting with it (e.g.
+                <code class="font-mono bg-slate-100 px-1 rounded">456000034*</code>).
+                Press Enter or Search to run the query.
+            </p>
+        </div>
+
+        <!-- Global error / success banners for mutation results -->
+        <div x-show="globalError"
+             x-transition
+             class="mb-3 p-3 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-700"
+             x-text="globalError">
+        </div>
+        <div x-show="globalSuccess"
+             x-transition
+             class="mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-700"
+             x-text="globalSuccess">
+        </div>
+
+        <!-- Empty states -->
+        <p x-show="hasSearched && !searching && results.length === 0"
+           class="text-sm text-slate-400 py-6 text-center">
+            No catalog matches for
+            <span class="font-mono text-slate-500" x-text="query.trim()"></span>.
+        </p>
+
+        <!-- Results table -->
+        <div x-show="results.length > 0"
+             class="border border-slate-200 rounded-xl overflow-hidden">
+            <div class="bg-slate-50/80 px-3 py-2 text-xs text-slate-500 border-b border-slate-200 flex items-center justify-between">
+                <span x-text="results.length + ' result' + (results.length === 1 ? '' : 's') + ' — click a row to expand'"></span>
+                <button x-show="Object.keys(expanded).length > 0"
+                        @click="collapseAll()"
+                        class="text-indigo-600 hover:text-indigo-800 font-medium">
+                    Collapse all
+                </button>
+            </div>
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-white border-b border-slate-100 text-xs text-slate-500 uppercase tracking-wider">
+                        <th class="pl-3 pr-2 py-2 text-left font-medium w-6"></th>
+                        <th class="px-2 py-2 text-left font-medium">Barcode</th>
+                        <th class="px-2 py-2 text-left font-medium">Title</th>
+                        <th class="px-2 py-2 text-left font-medium hidden sm:table-cell">Author</th>
+                        <th class="px-2 py-2 text-right font-medium">Avail</th>
+                        <th class="px-2 py-2 text-right font-medium pr-3">Total</th>
+                    </tr>
+                </thead>
+                <template x-for="r in results" :key="r.id">
+                    <tbody class="border-b border-slate-100 last:border-0">
+                                <!-- Main row -->
+                                <tr @click="toggleRow(r.barcode)"
+                                    :class="expanded[r.barcode] ? 'bg-indigo-50/60' : 'hover:bg-slate-50'"
+                                    class="cursor-pointer transition-colors">
+                                    <td class="pl-3 pr-2 py-2 text-slate-400">
+                                        <span x-text="expanded[r.barcode] ? '▾' : '▸'"></span>
+                                    </td>
+                                    <td class="px-2 py-2 font-mono text-xs text-slate-600"
+                                        x-text="r.barcode"></td>
+                                    <td class="px-2 py-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-800 font-medium truncate"
+                                                  x-text="r.title || '(untitled)'"></span>
+                                            <template x-if="!r.is_active">
+                                                <span class="bg-slate-200 text-slate-500 text-xs px-1.5 py-0.5 rounded-full flex-shrink-0">archived</span>
+                                            </template>
+                                        </div>
+                                    </td>
+                                    <td class="px-2 py-2 text-xs text-slate-500 hidden sm:table-cell truncate max-w-[160px]"
+                                        x-text="r.author || '—'"></td>
+                                    <td class="px-2 py-2 text-right font-semibold"
+                                        :class="r.available_copies > 0 ? 'text-emerald-700' : 'text-rose-600'"
+                                        x-text="r.available_copies"></td>
+                                    <td class="px-2 py-2 pr-3 text-right text-slate-600"
+                                        x-text="r.total_copies"></td>
+                                </tr>
+
+                                <!-- Expanded detail row -->
+                                <tr x-show="expanded[r.barcode]">
+                                    <td colspan="6" class="p-0 bg-slate-50/60 border-t border-slate-100">
+                                        <div class="p-4">
+
+                                            <!-- Loading state -->
+                                            <template x-if="expanded[r.barcode] && expanded[r.barcode].loading">
+                                                <p class="text-sm text-slate-400 text-center py-4">Loading…</p>
+                                            </template>
+
+                                            <!-- Row-level error -->
+                                            <template x-if="expanded[r.barcode] && expanded[r.barcode].error">
+                                                <div class="mb-3 p-2 bg-rose-50 border border-rose-200 rounded text-xs text-rose-700"
+                                                     x-text="expanded[r.barcode].error"></div>
+                                            </template>
+
+                                            <!-- Detail body -->
+                                            <template x-if="expanded[r.barcode] && expanded[r.barcode].book">
+                                                <div>
+                                                    <!-- Header -->
+                                                    <div class="flex items-start justify-between gap-4 mb-4">
+                                                        <div>
+                                                            <h3 class="font-semibold text-slate-900"
+                                                                x-text="expanded[r.barcode].book.title || '(untitled)'"></h3>
+                                                            <p class="text-xs text-slate-500 font-mono mt-0.5"
+                                                               x-text="expanded[r.barcode].book.barcode"></p>
+                                                            <p x-show="expanded[r.barcode].book.author"
+                                                               class="text-sm text-slate-500 mt-1"
+                                                               x-text="expanded[r.barcode].book.author"></p>
+                                                            <p x-show="expanded[r.barcode].book.created_at"
+                                                               class="text-xs text-slate-400 mt-1"
+                                                               x-text="'Added ' + (expanded[r.barcode].book.created_at || '').slice(0, 10)"></p>
+                                                        </div>
+                                                        <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
+                                                            <span class="px-2 py-0.5 rounded-full text-xs font-medium"
+                                                                  :class="expanded[r.barcode].book.is_active
+                                                                      ? 'bg-emerald-100 text-emerald-700'
+                                                                      : 'bg-slate-200 text-slate-500'"
+                                                                  x-text="expanded[r.barcode].book.is_active ? 'Active' : 'Archived'"></span>
+                                                            <span x-show="expanded[r.barcode].book.checked_out"
+                                                                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                                                                Checked out
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Inventory summary -->
+                                                    <div class="grid grid-cols-3 gap-2 mb-4">
+                                                        <div class="bg-white rounded-lg p-3 text-center border border-slate-100">
+                                                            <div class="text-xs text-slate-500 mb-0.5">Total</div>
+                                                            <div class="font-bold text-slate-800 text-lg"
+                                                                 x-text="expanded[r.barcode].book.total_copies"></div>
+                                                        </div>
+                                                        <div class="rounded-lg p-3 text-center border"
+                                                             :class="expanded[r.barcode].book.available_copies > 0
+                                                                 ? 'bg-emerald-50 border-emerald-100'
+                                                                 : 'bg-rose-50 border-rose-100'">
+                                                            <div class="text-xs mb-0.5"
+                                                                 :class="expanded[r.barcode].book.available_copies > 0 ? 'text-emerald-600' : 'text-rose-600'">
+                                                                Available
+                                                            </div>
+                                                            <div class="font-bold text-lg"
+                                                                 :class="expanded[r.barcode].book.available_copies > 0 ? 'text-emerald-700' : 'text-rose-700'"
+                                                                 x-text="expanded[r.barcode].book.available_copies"></div>
+                                                        </div>
+                                                        <div class="bg-amber-50 rounded-lg p-3 text-center border border-amber-100">
+                                                            <div class="text-xs text-amber-600 mb-0.5">Out</div>
+                                                            <div class="font-bold text-amber-700 text-lg"
+                                                                 x-text="expanded[r.barcode].book.checked_out_count"></div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Active loans -->
+                                                    <div x-show="expanded[r.barcode].book.active_loans && expanded[r.barcode].book.active_loans.length > 0"
+                                                         class="bg-amber-50 border border-amber-100 rounded-lg p-3 mb-4">
+                                                        <p class="text-xs font-medium text-amber-800 mb-2">Currently checked out to:</p>
+                                                        <ul class="space-y-2 text-sm">
+                                                            <template x-for="loan in expanded[r.barcode].book.active_loans" :key="loan.card_number">
+                                                                <li class="flex items-start justify-between gap-2">
+                                                                    <div class="flex-1 min-w-0">
+                                                                        <div class="flex items-center gap-2 flex-wrap">
+                                                                            <span class="font-medium text-amber-900"
+                                                                                  x-text="loan.patron_name"></span>
+                                                                            <span class="text-xs font-mono text-amber-600"
+                                                                                  x-text="loan.card_masked"></span>
+                                                                            <span class="bg-amber-200 text-amber-900 text-xs px-1.5 py-0.5 rounded-full font-semibold"
+                                                                                  x-text="loan.copies_count + ' ' + (loan.copies_count === 1 ? 'copy' : 'copies')"></span>
+                                                                        </div>
+                                                                        <template x-if="loan.copies && loan.copies.length > 0">
+                                                                            <ul class="text-xs text-amber-600 mt-1 ml-1 space-y-0.5">
+                                                                                <template x-for="(c, i) in loan.copies" :key="i">
+                                                                                    <li x-text="'• due ' + (c.due_date ? c.due_date.slice(0, 10) : '—')"></li>
+                                                                                </template>
+                                                                            </ul>
+                                                                        </template>
+                                                                    </div>
+                                                                    <button @click.stop="rowReturnLoan(r.barcode, loan.card_number)"
+                                                                            :disabled="expanded[r.barcode].acting"
+                                                                            class="text-xs bg-blue-600 text-white px-2.5 py-1 rounded
+                                                                                   hover:bg-blue-700 disabled:opacity-50 font-medium flex-shrink-0">
+                                                                        Return 1
+                                                                    </button>
+                                                                </li>
+                                                            </template>
+                                                        </ul>
+                                                    </div>
+
+                                                    <!-- Add more copies -->
+                                                    <div class="border-t border-slate-200 pt-3 mb-3">
+                                                        <label class="block text-xs font-medium text-slate-600 mb-1">
+                                                            Add more copies
+                                                        </label>
+                                                        <div class="flex gap-2" @click.stop>
+                                                            <input x-model.number="expanded[r.barcode].addQty"
+                                                                   type="number"
+                                                                   min="1"
+                                                                   max="999"
+                                                                   placeholder="1"
+                                                                   class="w-24 border border-slate-300 rounded-lg px-3 py-1.5 text-sm
+                                                                          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                                            <button @click.stop="rowAddCopies(r.barcode)"
+                                                                    :disabled="expanded[r.barcode].acting || !expanded[r.barcode].addQty || expanded[r.barcode].addQty < 1"
+                                                                    class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium
+                                                                           hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+                                                                + Add
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Set total -->
+                                                    <div class="border-t border-slate-200 pt-3 mb-3">
+                                                        <label class="block text-xs font-medium text-slate-600 mb-1">
+                                                            Set total copies
+                                                        </label>
+                                                        <div class="flex gap-2" @click.stop>
+                                                            <input x-model.number="expanded[r.barcode].newTotal"
+                                                                   type="number"
+                                                                   :min="expanded[r.barcode].book.checked_out_count"
+                                                                   max="999"
+                                                                   class="w-24 border border-slate-300 rounded-lg px-3 py-1.5 text-sm
+                                                                          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                                            <button @click.stop="rowUpdateQuantity(r.barcode)"
+                                                                    :disabled="expanded[r.barcode].acting || expanded[r.barcode].newTotal === expanded[r.barcode].book.total_copies"
+                                                                    class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-medium
+                                                                           hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                                                                Update
+                                                            </button>
+                                                        </div>
+                                                        <p class="text-xs text-slate-400 mt-1"
+                                                           x-text="'Cannot go below ' + expanded[r.barcode].book.checked_out_count + ' (currently checked out).'"></p>
+                                                    </div>
+
+                                                    <!-- Archive / Reactivate -->
+                                                    <div class="flex flex-wrap gap-2">
+                                                        <button x-show="expanded[r.barcode].book.is_active && expanded[r.barcode].book.checked_out_count === 0"
+                                                                @click.stop="rowAction(r.barcode, 'archive')"
+                                                                :disabled="expanded[r.barcode].acting"
+                                                                class="px-4 py-2 rounded-lg bg-rose-600 text-white text-sm font-medium
+                                                                       hover:bg-rose-700 disabled:opacity-50 transition-colors">
+                                                            Archive
+                                                        </button>
+                                                        <button x-show="!expanded[r.barcode].book.is_active"
+                                                                @click.stop="rowAction(r.barcode, 'reactivate')"
+                                                                :disabled="expanded[r.barcode].acting"
+                                                                class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium
+                                                                       hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+                                                            Reactivate
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </td>
+                                </tr>
+                    </tbody>
+                </template>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function catalogApp() {
+    return {
+        // ── Search state ───────────────────────────────────────
+        query:        '',
+        results:      [],
+        searching:    false,
+        hasSearched:  false,
+        _searchTimer: null,
+
+        /** Per-row expansion state.  Keys are barcodes.
+         *  Shape: { book, loading, acting, error, newTotal, addQty } */
+        expanded: {},
+
+        /** Global banners for the latest mutation's outcome. */
+        globalError:   '',
+        globalSuccess: '',
+
+        init() {
+            this.$nextTick(() => document.querySelector('input[x-model="query"]')?.focus());
+        },
+
+        // ── Search ─────────────────────────────────────────────
+
+        /**
+         * Debounced live-search handler so users don't have to click
+         * Search for every keystroke.  Wildcards work the same way.
+         */
+        onQueryInput() {
+            clearTimeout(this._searchTimer);
+            const q = this.query.trim();
+            if (!q) {
+                this.results     = [];
+                this.hasSearched = false;
+                return;
+            }
+            this._searchTimer = setTimeout(() => this.runSearch(), 220);
+        },
+
+        async runSearch() {
+            const q = this.query.trim();
+            if (!q) return;
+            this.searching   = true;
+            this.globalError = '';
+            try {
+                const r = await fetch(`/api/books/search?q=${encodeURIComponent(q)}&limit=100`);
+                const data = await r.json();
+                if (r.ok && Array.isArray(data)) {
+                    this.results = data;
+                } else {
+                    this.results = [];
+                }
+            } catch {
+                this.results = [];
+            } finally {
+                this.searching   = false;
+                this.hasSearched = true;
+            }
+        },
+
+        // ── Row expansion ──────────────────────────────────────
+
+        /**
+         * Click handler on a main row.  If the row is already expanded,
+         * collapses it (removing it from `expanded`); otherwise fetches
+         * full details and stores them under `expanded[barcode]`.
+         */
+        async toggleRow(barcode) {
+            if (this.expanded[barcode]) {
+                delete this.expanded[barcode];
+                return;
+            }
+            // Seed the entry so the expand row renders with a loading state
+            this.expanded[barcode] = {
+                book:     null,
+                loading:  true,
+                acting:   false,
+                error:    '',
+                newTotal: 0,
+                addQty:   1,
+            };
+            await this._fetchRowDetails(barcode);
+        },
+
+        async _fetchRowDetails(barcode) {
+            const row = this.expanded[barcode];
+            if (!row) return;
+            row.loading = true;
+            row.error   = '';
+            try {
+                const r = await fetch(`/api/books/${encodeURIComponent(barcode)}`);
+                const data = await r.json();
+                if (!r.ok) {
+                    row.error = data.error || 'Book not found';
+                    row.book  = null;
+                    return;
+                }
+                row.book     = data;
+                row.newTotal = data.total_copies;
+                row.addQty   = 1;
+                // Also refresh the matching search-results entry so the
+                // summary row (barcode / avail / total) stays in sync.
+                const idx = this.results.findIndex(b => b.barcode === barcode);
+                if (idx !== -1) this.results[idx] = { ...this.results[idx], ...data };
+            } catch (e) {
+                row.error = e.message;
+            } finally {
+                row.loading = false;
+            }
+        },
+
+        collapseAll() {
+            this.expanded = {};
+        },
+
+        // ── Row mutations ──────────────────────────────────────
+
+        async rowAction(barcode, action) {
+            const row = this.expanded[barcode];
+            if (!row || !row.book) return;
+            row.acting       = true;
+            row.error        = '';
+            this.globalError = '';
+            this.globalSuccess = '';
+
+            const url = action === 'archive'
+                ? `/api/books/${encodeURIComponent(barcode)}/archive`
+                : `/api/books/${encodeURIComponent(barcode)}/reactivate`;
+            const label = action === 'archive' ? 'Archived' : 'Reactivated';
+
+            try {
+                const r = await fetch(url, {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    row.error = data.error || 'Action failed';
+                    return;
+                }
+                this.globalSuccess = `${label}: ${barcode}`;
+                await this._fetchRowDetails(barcode);
+            } catch (e) {
+                row.error = e.message;
+            } finally {
+                row.acting = false;
+            }
+        },
+
+        async rowReturnLoan(barcode, cardNumber) {
+            const row = this.expanded[barcode];
+            if (!row) return;
+            row.acting         = true;
+            row.error          = '';
+            this.globalError   = '';
+            this.globalSuccess = '';
+            try {
+                const r = await fetch('/api/checkouts/return', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({ barcode, card_number: cardNumber }),
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    row.error = data.error || 'Return failed';
+                    return;
+                }
+                this.globalSuccess = `Returned ${barcode}`;
+                await this._fetchRowDetails(barcode);
+            } catch (e) {
+                row.error = e.message;
+            } finally {
+                row.acting = false;
+            }
+        },
+
+        async rowUpdateQuantity(barcode) {
+            const row = this.expanded[barcode];
+            if (!row || !row.book) return;
+            const newTotal = parseInt(row.newTotal, 10);
+            if (isNaN(newTotal) || newTotal < 0) {
+                row.error = 'Quantity must be a non-negative integer';
+                return;
+            }
+            row.acting         = true;
+            row.error          = '';
+            this.globalError   = '';
+            this.globalSuccess = '';
+            try {
+                const r = await fetch(`/api/books/${encodeURIComponent(barcode)}/quantity`, {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({ total_copies: newTotal }),
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    row.error = data.error || 'Update failed';
+                    return;
+                }
+                this.globalSuccess = `Total copies for ${barcode} set to ${newTotal}`;
+                await this._fetchRowDetails(barcode);
+            } catch (e) {
+                row.error = e.message;
+            } finally {
+                row.acting = false;
+            }
+        },
+
+        async rowAddCopies(barcode) {
+            const row = this.expanded[barcode];
+            if (!row || !row.book) return;
+            const add = parseInt(row.addQty, 10);
+            if (isNaN(add) || add < 1) {
+                row.error = 'Enter a positive number of copies to add';
+                return;
+            }
+            row.acting         = true;
+            row.error          = '';
+            this.globalError   = '';
+            this.globalSuccess = '';
+            try {
+                const newTotal = row.book.total_copies + add;
+                const r = await fetch(`/api/books/${encodeURIComponent(barcode)}/quantity`, {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({ total_copies: newTotal }),
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    row.error = data.error || 'Update failed';
+                    return;
+                }
+                this.globalSuccess = `Added ${add} ${add === 1 ? 'copy' : 'copies'} to ${barcode} (new total: ${newTotal})`;
+                await this._fetchRowDetails(barcode);
+            } catch (e) {
+                row.error = e.message;
+            } finally {
+                row.acting = false;
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

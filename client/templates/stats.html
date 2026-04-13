@@ -38,7 +38,7 @@
     </div>
 
     <!-- ── Key metrics grid ─────────────────────────────────── -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
 
         <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-4">
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Patrons</p>
@@ -47,9 +47,15 @@
         </div>
 
         <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-4">
-            <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Catalog</p>
+            <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Unique Titles</p>
             <p class="text-3xl font-bold text-indigo-600" x-text="stats.total_books ?? '—'"></p>
-            <p class="text-xs text-slate-400 mt-1">unique items</p>
+            <p class="text-xs text-slate-400 mt-1">distinct catalog entries</p>
+        </div>
+
+        <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-4">
+            <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Total Copies</p>
+            <p class="text-3xl font-bold text-indigo-600" x-text="stats.total_copies ?? '—'"></p>
+            <p class="text-xs text-slate-400 mt-1">physical copies on hand</p>
         </div>
 
         <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-4">
@@ -190,19 +196,19 @@
         <!-- Occupancy rate -->
         <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5">
             <h3 class="text-sm font-semibold text-slate-700 mb-4">Occupancy Rate</h3>
-            <template x-if="stats.total_books > 0">
+            <template x-if="stats.total_copies > 0">
                 <div>
                     <p class="text-3xl font-bold text-indigo-600 mb-1"
-                       x-text="Math.round((stats.active_checkouts / stats.total_books) * 100) + '%'"></p>
-                    <p class="text-xs text-slate-400 mb-4">of catalog currently checked out</p>
+                       x-text="Math.round((stats.active_checkouts / stats.total_copies) * 100) + '%'"></p>
+                    <p class="text-xs text-slate-400 mb-4">of physical copies currently checked out</p>
                     <div class="w-full bg-slate-100 rounded-full h-2">
                         <div class="bg-indigo-500 h-2 rounded-full transition-all duration-500"
-                             :style="'width: ' + Math.min(Math.round((stats.active_checkouts / stats.total_books) * 100), 100) + '%'">
+                             :style="'width: ' + Math.min(Math.round((stats.active_checkouts / stats.total_copies) * 100), 100) + '%'">
                         </div>
                     </div>
                 </div>
             </template>
-            <template x-if="!stats.total_books">
+            <template x-if="!stats.total_copies">
                 <p class="text-sm text-slate-400">No items in catalog yet.</p>
             </template>
         </div>
@@ -252,6 +258,7 @@ function statsApp() {
     const emptyStats = () => ({
         total_patrons:         0,
         total_books:           0,
+        total_copies:          0,
         active_checkouts:      0,
         overdue_items:         0,
         total_checkout_events: 0,

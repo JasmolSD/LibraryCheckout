@@ -1,109 +1,112 @@
 /**
- * register.js — New-patron registration page Alpine.js component.
+ * register.js — Registration page Alpine.js component.
  *
- * Handles the full patron registration form:
- *   • Auto-fetches the next available card number from /api/patrons/next-card
- *     (or pre-fills from `?card=` when redirected from the checkout screen)
- *   • Validates required fields client-side before submitting
- *   • POSTs to /api/patrons/ and redirects to /?card=<card> on success
+ * Hosts two tabs:
+ *   • Patron — auto-generates a card number and registers a new patron
+ *   • Book   — scans an ISBN (auto-fills via Google Books) and adds the
+ *              item to the catalog with a quantity
+ *
+ * The Book tab is the canonical place to add new items; the /catalog
+ * page is for searching and managing items that already exist.
  *
  * Mounted via x-data="registerApp()" on the page root element in register.html.
- */
-
-/**
- * Factory function that returns the Alpine.js component data and methods
- * for the patron registration screen.
  *
  * @returns {object} Alpine component object
  */
 function registerApp() {
     return {
-        // ── Form state ───────────────────────────────────────────
-        /**
-         * Registration form field values.
-         * card_number uses a string to preserve leading zeros.
-         */
-        form: {
+        // ── Tab state ───────────────────────────────────────────
+        /** Active tab: 'patron' | 'book'. */
+        tab: 'patron',
+
+        // ── Patron state ────────────────────────────────────────
+        patronForm: {
             card_number: '',
-            first_name: '',
-            last_name: '',
+            first_name:  '',
+            last_name:   '',
             middle_name: '',
-            birth_date: '',
-            email: '',
-            phone: '',
+            birth_date:  '',
+            email:       '',
+            phone:       '',
         },
+        patronSubmitting: false,
+        patronError:      '',
+        cardPreFilled:    false,
 
-        /** True while the POST request is in flight. */
-        submitting: false,
-
-        /** Error message to show above the form, or empty string. */
-        errorMsg: '',
-
-        /** True when the card number was pre-filled from the URL (visual hint). */
-        cardPreFilled: false,
+        // ── Book state ──────────────────────────────────────────
+        bookForm: {
+            barcode:  '',
+            title:    '',
+            author:   '',
+            category: 'book',
+            quantity: 1,
+        },
+        bookSubmitting:     false,
+        bookLookingUp:      false,
+        bookLookupStatus:   '',
+        bookError:          '',
+        bookSuccess:        '',
+        bookLastLookedUp:   '',
+        bookBarcodeInvalid: false,
+        _bookInvalidTimer:  null,
 
         // ── Lifecycle ────────────────────────────────────────────
 
-        /**
-         * Alpine init hook.
-         * If a `?card=` URL parameter is present (scanned at checkout), uses that number.
-         * Otherwise fetches the next auto-generated card number from the server.
-         * Focuses the last-name field once the card is resolved.
-         */
         async init() {
             const params = new URLSearchParams(window.location.search);
+            // ?tab=book opens straight to the book form
+            if (params.get('tab') === 'book') this.tab = 'book';
+
             const card = params.get('card');
             if (card) {
-                this.form.card_number = card;
+                this.patronForm.card_number = card;
                 this.cardPreFilled = true;
             } else {
                 try {
                     const r = await fetch('/api/patrons/next-card');
                     const data = await r.json();
-                    this.form.card_number = data.card_number ?? '';
+                    this.patronForm.card_number = data.card_number ?? '';
                 } catch {
-                    this.errorMsg = 'Could not generate a card number. Please refresh.';
+                    this.patronError = 'Could not generate a card number. Please refresh.';
                 }
             }
-            this.$nextTick(() => document.getElementById('reg-last')?.focus());
+            this.$nextTick(() => {
+                if (this.tab === 'patron') {
+                    document.getElementById('reg-last')?.focus();
+                } else {
+                    document.getElementById('isbn')?.focus();
+                }
+            });
         },
 
-        // ── Form submission ───────────────────────────────────────
+        // ── Patron submission ────────────────────────────────────
 
-        /**
-         * Validate required fields and POST to /api/patrons/.
-         * On success, redirects to the main checkout screen with the new card pre-loaded.
-         *
-         * @returns {Promise<void>}
-         */
-        async submit() {
-            this.errorMsg = '';
-
-            // Client-side required-field validation
-            if (!this.form.last_name.trim()) {
-                this.errorMsg = 'Last name is required.';
+        async submitPatron() {
+            this.patronError = '';
+            if (!this.patronForm.last_name.trim()) {
+                this.patronError = 'Last name is required.';
                 return;
             }
-            if (!this.form.first_name.trim()) {
-                this.errorMsg = 'First name is required.';
+            if (!this.patronForm.first_name.trim()) {
+                this.patronError = 'First name is required.';
                 return;
             }
-            if (!this.form.birth_date) {
-                this.errorMsg = 'Date of birth is required.';
+            if (!this.patronForm.birth_date) {
+                this.patronError = 'Date of birth is required.';
                 return;
             }
 
-            this.submitting = true;
+            this.patronSubmitting = true;
             try {
                 const body = {
-                    card_number: this.form.card_number.trim(),
-                    first_name:  this.form.first_name.trim(),
-                    last_name:   this.form.last_name.trim(),
-                    birth_date:  this.form.birth_date,
+                    card_number: this.patronForm.card_number.trim(),
+                    first_name:  this.patronForm.first_name.trim(),
+                    last_name:   this.patronForm.last_name.trim(),
+                    birth_date:  this.patronForm.birth_date,
                 };
-                if (this.form.middle_name.trim()) body.middle_name = this.form.middle_name.trim();
-                if (this.form.email.trim())       body.email       = this.form.email.trim();
-                if (this.form.phone.trim())        body.phone       = this.form.phone.trim();
+                if (this.patronForm.middle_name.trim()) body.middle_name = this.patronForm.middle_name.trim();
+                if (this.patronForm.email.trim())       body.email       = this.patronForm.email.trim();
+                if (this.patronForm.phone.trim())       body.phone       = this.patronForm.phone.trim();
 
                 const r = await fetch('/api/patrons/', {
                     method: 'POST',
@@ -112,16 +115,104 @@ function registerApp() {
                 });
                 const data = await r.json();
                 if (!r.ok) {
-                    this.errorMsg = data.error || 'Registration failed. Please check your entries.';
+                    this.patronError = data.error || 'Registration failed. Please check your entries.';
                     return;
                 }
-                // Redirect to checkout screen; card is passed as query param to auto-load
                 window.location.href = `/?card=${encodeURIComponent(data.card_number)}`;
             } catch (e) {
-                this.errorMsg = e.message;
+                this.patronError = e.message;
             } finally {
-                this.submitting = false;
+                this.patronSubmitting = false;
             }
+        },
+
+        // ── Book: numeric sanitiser + ISBN auto-fill ─────────────
+
+        sanitizeBarcode(event) {
+            const raw = event.target.value;
+            const clean = raw.replace(/\D/g, '').slice(0, 14);
+            this.bookForm.barcode = clean;
+            if (event.target.value !== clean) event.target.value = clean;
+            if (raw !== clean) {
+                this.bookBarcodeInvalid = true;
+                clearTimeout(this._bookInvalidTimer);
+                this._bookInvalidTimer = setTimeout(() => { this.bookBarcodeInvalid = false; }, 2500);
+            }
+        },
+
+        async onIsbnChange() {
+            const isbn = this.bookForm.barcode.trim();
+            if (!isbn || isbn === this.bookLastLookedUp) return;
+            if (!/^\d{10}$|^\d{13}$/.test(isbn)) return;
+
+            this.bookLastLookedUp = isbn;
+            this.bookLookingUp    = true;
+            this.bookLookupStatus = '';
+            try {
+                const r    = await fetch(`/api/books/lookup?isbn=${encodeURIComponent(isbn)}`);
+                const data = await r.json();
+                if (data.found) {
+                    if (data.title)    this.bookForm.title    = data.title;
+                    if (data.author)   this.bookForm.author   = data.author;
+                    if (data.category) this.bookForm.category = data.category;
+                    this.bookLookupStatus = 'found';
+                } else if (data.error === 'metadata service unavailable') {
+                    this.bookLookupStatus = 'unavailable';
+                } else {
+                    this.bookLookupStatus = 'not_found';
+                }
+            } catch {
+                this.bookLookupStatus = 'unavailable';
+            } finally {
+                this.bookLookingUp = false;
+            }
+        },
+
+        // ── Book submission ──────────────────────────────────────
+
+        async submitBook() {
+            this.bookError   = '';
+            this.bookSuccess = '';
+            if (!this.bookForm.barcode.trim()) {
+                this.bookError = 'ISBN or barcode is required.';
+                return;
+            }
+            this.bookSubmitting = true;
+            try {
+                const qty = Math.max(1, parseInt(this.bookForm.quantity, 10) || 1);
+                const r = await fetch('/api/books/', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({
+                        barcode:  this.bookForm.barcode.trim(),
+                        title:    this.bookForm.title.trim()    || null,
+                        author:   this.bookForm.author.trim()   || null,
+                        category: this.bookForm.category,
+                        quantity: qty,
+                    }),
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    this.bookError = data.error || 'Could not add the item.';
+                    return;
+                }
+                const label = data.title ? `"${data.title}"` : `barcode ${data.barcode}`;
+                const copyNote = qty > 1 ? ` (${qty} copies)` : '';
+                this.bookSuccess = `Added ${label} to the catalog${copyNote}.`;
+            } catch (e) {
+                this.bookError = e.message;
+            } finally {
+                this.bookSubmitting = false;
+            }
+        },
+
+        resetBook() {
+            this.bookForm         = { barcode: '', title: '', author: '', category: 'book', quantity: 1 };
+            this.bookSuccess      = '';
+            this.bookError        = '';
+            this.bookLookupStatus = '';
+            this.bookLastLookedUp = '';
+            this.$nextTick(() => document.getElementById('isbn')?.focus());
         },
     };
 }

@@ -40,6 +40,13 @@ function checkoutApp() {
         _cardInvalidTimer: null,
         _itemInvalidTimer: null,
 
+        /** Autofill dropdown state for the item-barcode field. */
+        itemResults:      [],
+        itemSearching:    false,
+        itemShowDropdown: false,
+        itemHighlighted:  -1,
+        _itemSearchTimer: null,
+
         // ── Loan period state ────────────────────────────────────
         /** Preset selection: '1' | '2' | '3' | 'custom'. */
         loanPreset: '2',
@@ -107,6 +114,71 @@ function checkoutApp() {
                 clearTimeout(this[timerKey]);
                 this[timerKey] = setTimeout(() => { this[flagKey] = false; }, 2500);
             }
+            // Trigger autofill search for the item barcode field
+            if (key === 'itemInput') this._scheduleItemSearch();
+        },
+
+        // ── Item autofill ─────────────────────────────────────────
+
+        _scheduleItemSearch() {
+            clearTimeout(this._itemSearchTimer);
+            const q = this.itemInput.trim();
+            if (!q) {
+                this.itemResults      = [];
+                this.itemShowDropdown = false;
+                return;
+            }
+            this._itemSearchTimer = setTimeout(() => this._runItemSearch(), 180);
+        },
+
+        async _runItemSearch() {
+            const q = this.itemInput.trim();
+            if (!q) return;
+            this.itemSearching = true;
+            try {
+                const r = await fetch(`/api/books/search?q=${encodeURIComponent(q)}&limit=10`);
+                const data = await r.json();
+                if (r.ok && Array.isArray(data)) {
+                    this.itemResults      = data;
+                    this.itemShowDropdown = true;
+                    this.itemHighlighted  = data.length > 0 ? 0 : -1;
+                }
+            } catch {
+                this.itemResults = [];
+            } finally {
+                this.itemSearching = false;
+            }
+        },
+
+        itemHighlightNext() {
+            if (!this.itemShowDropdown || this.itemResults.length === 0) return;
+            this.itemHighlighted = (this.itemHighlighted + 1) % this.itemResults.length;
+        },
+
+        itemHighlightPrev() {
+            if (!this.itemShowDropdown || this.itemResults.length === 0) return;
+            this.itemHighlighted =
+                (this.itemHighlighted - 1 + this.itemResults.length) % this.itemResults.length;
+        },
+
+        selectItem(book) {
+            this.itemInput        = book.barcode;
+            this.itemResults      = [];
+            this.itemShowDropdown = false;
+            this.itemHighlighted  = -1;
+        },
+
+        /**
+         * Called on Enter in the item field.  If a dropdown item is highlighted,
+         * selects it; otherwise submits the current action as before.
+         */
+        itemEnterKey() {
+            if (this.itemShowDropdown && this.itemHighlighted >= 0 && this.itemResults[this.itemHighlighted]) {
+                this.selectItem(this.itemResults[this.itemHighlighted]);
+                return;
+            }
+            this.itemShowDropdown = false;
+            this.submitAction();
         },
 
         // ── Patron lookup ─────────────────────────────────────────

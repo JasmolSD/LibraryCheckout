@@ -75,10 +75,21 @@ class Book(_Base):
     author: Mapped[str | None] = mapped_column(String(120))
     # categories: book, dvd, audiobook, magazine, ebook, other
     category: Mapped[str] = mapped_column(String(40), default="book")
+    total_copies: Mapped[int] = mapped_column(default=1)
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
     is_active: Mapped[bool] = mapped_column(default=True)
 
     loans: Mapped[list[Loan]] = relationship(back_populates="book")
+
+    @property
+    def checked_out_count(self) -> int:
+        """Number of copies currently out on loan."""
+        return sum(1 for loan in self.loans if loan.returned_at is None)
+
+    @property
+    def available_copies(self) -> int:
+        """Number of copies currently available for checkout."""
+        return max(0, self.total_copies - self.checked_out_count)
 
     def to_dict(self) -> dict:
         return {
@@ -87,7 +98,11 @@ class Book(_Base):
             "title": self.title,
             "author": self.author,
             "category": self.category,
+            "total_copies": self.total_copies,
+            "checked_out_count": self.checked_out_count,
+            "available_copies": self.available_copies,
             "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
 
