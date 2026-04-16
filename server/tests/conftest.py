@@ -18,10 +18,11 @@ def app():
         db.drop_all()
 
         # Clear the stats cache so it doesn't leak between tests
-        from server.app.services import checkout_service
+        from server.app.services import checkout_service, update_check
 
         checkout_service._stats_cache = None
         checkout_service._stats_cache_time = 0
+        update_check.reset_cache()
 
 
 @pytest.fixture

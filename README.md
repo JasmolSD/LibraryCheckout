@@ -141,6 +141,72 @@ docker run -p 5000:5000 library-checkout
 |---|---|---|
 | `GET` | `/api/stats` | Aggregate library statistics (patrons, catalog, activity, top books) |
 
+## Shared database across multiple PCs (optional)
+
+By default the app uses a local **SQLite** database (`data/library.db`
+next to the executable). That's perfect for a single front-desk PC,
+but it **does not** work if you want two or more library computers
+updating the same data at the same time — SQLite is a single-writer
+database and sharing the file over a network drive will corrupt it.
+
+To run the app on multiple PCs at once, point every machine at a
+shared **PostgreSQL** database via the `DATABASE_URL` environment
+variable. The recommended option is [Supabase](https://supabase.com),
+which offers a generous free tier (500 MB storage, no credit card).
+
+### Supabase setup (5 minutes)
+
+1. **Create a Supabase account** at https://supabase.com — GitHub login is fastest.
+2. **New Project** → pick a name (e.g. `library-checkout`), set a strong
+   database password (save it — you'll need it in step 4), choose the
+   region closest to your library. Wait ~2 minutes for provisioning.
+3. Open **Project Settings → Database → Connection string** and copy
+   the **Transaction pooler** URI. It looks like:
+   ```
+   postgresql://postgres.xxxxxx:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+   ```
+4. In each library PC's `.env`, replace `[YOUR-PASSWORD]` with the real
+   password and add the line:
+   ```bash
+   DATABASE_URL=postgresql+psycopg://postgres.xxxxxx:yourpassword@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+   ```
+   (Note the `postgresql+psycopg://` scheme — that tells SQLAlchemy to
+   use the `psycopg` driver.)
+5. **Install the Postgres driver** once on the build machine:
+   ```bash
+   uv sync --group postgres
+   ```
+6. **Launch the app.** On first start it auto-creates all the tables in
+   your Supabase database. Every library PC running with the same
+   `DATABASE_URL` now sees the same data live.
+
+### Migrating existing SQLite data
+
+If you already have data in `data/library.db` and want to carry it
+over, run the one-shot migration script:
+
+```bash
+# .env must have the Postgres DATABASE_URL set before this step
+uv run python scripts/migrate_sqlite_to_postgres.py
+```
+
+The script refuses to run if the destination database already has data,
+so you won't accidentally double-insert. Pass `--yes` to skip the
+confirmation prompt, or `--sqlite PATH` if your SQLite file lives
+somewhere other than `data/library.db`.
+
+### When to use SQLite vs Postgres
+
+| Use SQLite (default) when... | Use Postgres when... |
+|---|---|
+| Only one PC runs the app | Two or more PCs run it concurrently |
+| You want zero ops | You want the DB in the cloud (multi-site, remote access) |
+| The library has no reliable internet | The library has reliable Wi-Fi |
+| Data should live only on the library PC | You're OK with data hosted by Supabase / Neon / etc. |
+
+Tests always run against in-memory SQLite regardless of `DATABASE_URL`,
+so the test suite stays fast and has no external dependencies.
+
 ## Email configuration (optional)
 
 The patron-card email and receipt-email features both use the `SMTP_*`

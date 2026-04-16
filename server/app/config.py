@@ -110,6 +110,22 @@ class BaseConfig:
         "on",
     )
 
+    # GitHub auto-update check — compares the baked-in VERSION against
+    # the latest release tag on the configured repo and surfaces a
+    # banner in the UI when a newer version is available.
+    GITHUB_REPO = os.getenv("GITHUB_REPO", "JasmolSD/LibraryCheckout")
+    # Optional: fine-grained personal access token with contents:read
+    # on the target repo, only needed if the repo is private.
+    GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+    # Disable the update check entirely (e.g. for dev builds or
+    # air-gapped installs that shouldn't call home).
+    UPDATE_CHECK_ENABLED = os.getenv("UPDATE_CHECK_ENABLED", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
     # Default checkout period in weeks
     DEFAULT_CHECKOUT_WEEKS = 2
     VALID_BARCODE_LENGTHS = (10, 14)
@@ -147,6 +163,7 @@ class TestConfig(BaseConfig):
     IMAP_USE_SSL = False
     ARCHIVE_NOTIFICATIONS_ENABLED = False
     NOTIFY_PATRONS_ON_ACTION = False
+    UPDATE_CHECK_ENABLED = False
 
 
 _CONFIGS = {

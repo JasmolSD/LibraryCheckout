@@ -11,6 +11,12 @@ from .config import get_config
 from .database import db
 from .utils.logger import setup_logging
 
+#: Application version — compared against the latest GitHub release tag
+#: by :mod:`server.app.services.update_check`.  Bump this whenever you
+#: publish a new release so the "Update available" banner triggers for
+#: older installs.  Tags on GitHub are expected to look like ``v0.1.0``.
+VERSION = "0.1.0"
+
 
 def create_app(config_name: str | None = None) -> Flask:
     """Create and configure a Flask application instance.
@@ -182,6 +188,19 @@ def create_app(config_name: str | None = None) -> Flask:
             JSON ``{"status": "ok", "branch": "<library branch name>"}``.
         """
         return {"status": "ok", "branch": app.config["LIBRARY_BRANCH"]}
+
+    @app.route("/api/update-check")
+    def update_check_api():
+        """Return the current version + whether a newer GitHub release exists.
+
+        Pass ``?refresh=1`` to bypass the in-memory cache.
+        """
+        from flask import jsonify, request
+
+        from .services.update_check import check_for_update
+
+        force = request.args.get("refresh") == "1"
+        return jsonify(check_for_update(force=force))
 
     # Create tables on first run, then apply any additive column migrations
     # so end users upgrading an older library.db don't hit "no such column".

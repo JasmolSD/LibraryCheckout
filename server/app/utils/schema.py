@@ -5,11 +5,17 @@ When the model schema grows new columns between releases, SQLAlchemy's
 upgrades their ``.exe`` would otherwise hit ``no such column`` errors
 against their old ``library.db``.
 
-This module inspects every table known to SQLAlchemy's metadata, checks
-the live SQLite schema, and runs ``ALTER TABLE ... ADD COLUMN`` for any
-columns that are missing.  It only handles **additive** changes — it
-never drops, renames, or retypes existing columns.  Destructive changes
-still require a one-off migration script.
+This module inspects every table known to SQLAlchemy's metadata,
+compares it to the live database schema, and runs
+``ALTER TABLE ... ADD COLUMN`` for any columns that are missing. It's
+**dialect-aware** — works against both SQLite (dev/desktop) and
+PostgreSQL (Supabase / Neon / self-hosted). Types are rendered using
+the engine's own dialect so booleans, timestamps, etc. come out right
+on each backend.
+
+It only handles **additive** changes — it never drops, renames, or
+retypes existing columns. Destructive changes still require a one-off
+migration script.
 
 Usage::
 
@@ -22,7 +28,6 @@ Usage::
 from __future__ import annotations
 
 from sqlalchemy import Column, MetaData, inspect, text
-from sqlalchemy.dialects import sqlite
 from sqlalchemy.engine import Engine
 
 
@@ -40,6 +45,7 @@ def ensure_schema(engine: Engine, metadata: MetaData) -> list[str]:
     """
     added: list[str] = []
     inspector = inspect(engine)
+    dialect = engine.dialect
 
     for table_name, table in metadata.tables.items():
         if not inspector.has_table(table_name):
@@ -49,7 +55,7 @@ def ensure_schema(engine: Engine, metadata: MetaData) -> list[str]:
         for column in table.columns:
             if column.name in existing_cols:
                 continue
-            col_sql = _render_add_column(column)
+            col_sql = _render_add_column(column, dialect)
             with engine.begin() as conn:
                 conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_sql}"))
             added.append(f"{table_name}.{column.name}")
@@ -57,19 +63,22 @@ def ensure_schema(engine: Engine, metadata: MetaData) -> list[str]:
     return added
 
 
-def _render_add_column(column: Column) -> str:
-    """Render a SQLite ``ALTER TABLE ... ADD COLUMN`` fragment for ``column``.
+def _render_add_column(column: Column, dialect) -> str:
+    """Render an ``ALTER TABLE ... ADD COLUMN`` fragment for ``column``.
 
-    Handles the common case of new nullable / defaulted columns. If the
-    column is NOT NULL without a literal default, falls back to nullable
-    so the migration doesn't fail against an existing non-empty table —
-    SQLite won't let you add a ``NOT NULL`` column without a default.
+    Uses the engine's own dialect to render the column type, so booleans
+    and timestamps come out correctly on both SQLite and PostgreSQL.
+
+    If the column is NOT NULL without a literal default, falls back to
+    nullable because neither SQLite nor Postgres let you add a
+    ``NOT NULL`` column without a default against an existing non-empty
+    table.
     """
     name = column.name
-    col_type = column.type.compile(dialect=sqlite.dialect())
+    col_type = column.type.compile(dialect=dialect)
     parts: list[str] = [name, col_type]
 
-    default_sql = _literal_default(column)
+    default_sql = _literal_default(column, dialect)
     if default_sql is not None:
         parts.append(f"DEFAULT {default_sql}")
 
@@ -80,8 +89,12 @@ def _render_add_column(column: Column) -> str:
     return " ".join(parts)
 
 
-def _literal_default(column: Column) -> str | None:
-    """Return a SQLite literal for ``column``'s default, or None.
+def _literal_default(column: Column, dialect) -> str | None:
+    """Return a SQL literal for ``column``'s default, or None.
+
+    Booleans render as ``TRUE``/``FALSE`` on PostgreSQL and ``1``/``0``
+    on SQLite — standard LITERAL rendering handles the difference when
+    we check the dialect name.
 
     Callable defaults (e.g. ``_utcnow``) and SQL-expression defaults are
     skipped — they can't be inlined into an ``ALTER TABLE`` statement,
@@ -97,6 +110,8 @@ def _literal_default(column: Column) -> str | None:
         return None
 
     if isinstance(arg, bool):
+        if dialect.name == "postgresql":
+            return "TRUE" if arg else "FALSE"
         return "1" if arg else "0"
     if isinstance(arg, (int, float)):
         return str(arg)

@@ -67,6 +67,26 @@ class TestSearchBooks:
         assert len(results) >= 2
         assert all("Orwell" in (b["author"] or "") for b in results)
 
+    def test_search_by_title_case_insensitive(self, client):
+        """Uses func.lower() under the hood so it works on both SQLite and Postgres."""
+        self._seed(client)
+        r = client.get("/api/books/search?q=gatsby")  # lowercase query
+        results = r.get_json()
+        assert any(b["barcode"] == "4560000340000" for b in results)
+
+    def test_search_by_author_case_insensitive(self, client):
+        self._seed(client)
+        r = client.get("/api/books/search?q=orwell")  # lowercase query
+        results = r.get_json()
+        assert len(results) >= 2
+        assert all("Orwell" in (b["author"] or "") for b in results)
+
+    def test_search_by_mixed_case_title(self, client):
+        self._seed(client)
+        r = client.get("/api/books/search?q=GATSBY")
+        results = r.get_json()
+        assert any(b["barcode"] == "4560000340000" for b in results)
+
     def test_search_wildcard_barcode_prefix(self, client):
         self._seed(client)
         r = client.get("/api/books/search?q=456000034*")

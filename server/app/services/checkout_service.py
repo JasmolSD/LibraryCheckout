@@ -392,12 +392,16 @@ def search_books(query: str, limit: int = 20) -> list[Book]:
             .all()
         )
 
+    # Title / author are mixed-case; use LOWER() so the match is
+    # case-insensitive on both SQLite (where LIKE is already case-
+    # insensitive for ASCII) and PostgreSQL (where LIKE is case-sensitive).
+    q_lower = q.lower()
     return (
         Book.query.filter(
             db.or_(
                 Book.barcode.startswith(q),
-                Book.title.contains(q),
-                Book.author.contains(q),
+                func.lower(Book.title).contains(q_lower),
+                func.lower(Book.author).contains(q_lower),
             )
         )
         .order_by(Book.is_active.desc(), Book.title.asc())
