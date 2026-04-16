@@ -19,8 +19,8 @@ else:
     _env_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(_env_path)
 
-HOST = "127.0.0.1"
-PORT = 5000
+HOST = os.getenv("BIND_HOST", "0.0.0.0")
+PORT = int(os.getenv("BIND_PORT", "5000"))
 
 
 def start_flask() -> None:
