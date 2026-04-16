@@ -19,6 +19,11 @@ dependencies = [
 desktop = [
     "pywebview>=5.0.0",
 ]
+# Install when DATABASE_URL points at Postgres (e.g. Supabase, Neon, Railway).
+# Not needed for the default SQLite setup.
+postgres = [
+    "psycopg[binary]>=3.1.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-flask>=1.3.0",

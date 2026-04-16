@@ -14,13 +14,35 @@ Usage::
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+def _project_root() -> Path:
+    """Return the directory where ``data/``, ``logs/`` and ``.env`` live.
+
+    When running from source, this is the repo root — two levels above
+    this file.  When running as a PyInstaller one-file bundle, ``__file__``
+    points inside a temporary extraction directory that is wiped on exit,
+    so we use the folder containing the ``.exe`` instead.  That folder
+    persists across launches and across binary upgrades, so the SQLite
+    database and ``.env`` configuration both survive when the user
+    replaces the executable.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[2]
+
+
+PROJECT_ROOT = _project_root()
+
+# Load .env from next to the executable (or the repo root when running
+# from source).  Without the explicit path, python-dotenv only searches
+# the current working directory, which is unreliable for a packaged
+# desktop app launched via a Start-menu shortcut or double-click.
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 class BaseConfig:
@@ -42,6 +64,67 @@ class BaseConfig:
     LIBRARY_ADDRESS = os.getenv("LIBRARY_ADDRESS", "")
     LIBRARY_HOURS = os.getenv("LIBRARY_HOURS", "")
     APP_TITLE = os.getenv("APP_TITLE", "Library Checkout")
+
+    # SMTP — leave SMTP_HOST empty to disable all outgoing email features.
+    # When set, the app can email patron cards and checkout receipts and
+    # also mail itself an archival copy of checkouts / patron edits.
+    SMTP_HOST = os.getenv("SMTP_HOST", "")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM = os.getenv("SMTP_FROM", "")
+    SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes", "on")
+
+    # IMAP — optional. When set, archival notification emails are also
+    # APPENDed to a named Gmail label / IMAP folder ("Library Receipts"
+    # or "Library Patrons") so they're easy to find. Without IMAP, the
+    # notifications still go out via SMTP and land in the Gmail Inbox
+    # and Sent Mail naturally; only the auto-labelling is missing.
+    IMAP_HOST = os.getenv("IMAP_HOST", "")
+    IMAP_PORT = int(os.getenv("IMAP_PORT", "993"))
+    IMAP_USER = os.getenv("IMAP_USER", "")  # falls back to SMTP_USER
+    IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", "")  # falls back to SMTP_PASSWORD
+    IMAP_USE_SSL = os.getenv("IMAP_USE_SSL", "true").lower() in ("1", "true", "yes", "on")
+
+    # Labels the archival notifications get filed under via IMAP APPEND
+    LIBRARY_RECEIPTS_LABEL = os.getenv("LIBRARY_RECEIPTS_LABEL", "Library Receipts")
+    LIBRARY_PATRONS_LABEL = os.getenv("LIBRARY_PATRONS_LABEL", "Library Patrons")
+
+    # Master on/off switch for the automatic archival notifications.
+    # When False, checkouts and patron edits still work normally but no
+    # self-addressed email is sent. Default True — honours SMTP setup.
+    ARCHIVE_NOTIFICATIONS_ENABLED = os.getenv("ARCHIVE_NOTIFICATIONS", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+    # Master on/off switch for outgoing confirmation emails TO patrons
+    # whenever a librarian performs a checkout, renewal, or return.
+    # Only fires when the patron has an email on file AND SMTP is set.
+    NOTIFY_PATRONS_ON_ACTION = os.getenv("NOTIFY_PATRONS", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+    # GitHub auto-update check — compares the baked-in VERSION against
+    # the latest release tag on the configured repo and surfaces a
+    # banner in the UI when a newer version is available.
+    GITHUB_REPO = os.getenv("GITHUB_REPO", "JasmolSD/LibraryCheckout")
+    # Optional: fine-grained personal access token with contents:read
+    # on the target repo, only needed if the repo is private.
+    GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+    # Disable the update check entirely (e.g. for dev builds or
+    # air-gapped installs that shouldn't call home).
+    UPDATE_CHECK_ENABLED = os.getenv("UPDATE_CHECK_ENABLED", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
     # Default checkout period in weeks
     DEFAULT_CHECKOUT_WEEKS = 2
@@ -65,6 +148,22 @@ class TestConfig(BaseConfig):
     DEBUG = True
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     LOG_LEVEL = "WARNING"
+    # Tests run in isolation from the developer's .env so behaviour is
+    # deterministic regardless of whether SMTP / IMAP are configured locally.
+    SMTP_HOST = ""
+    SMTP_PORT = 587
+    SMTP_USER = ""
+    SMTP_PASSWORD = ""
+    SMTP_FROM = ""
+    SMTP_USE_TLS = False
+    IMAP_HOST = ""
+    IMAP_PORT = 993
+    IMAP_USER = ""
+    IMAP_PASSWORD = ""
+    IMAP_USE_SSL = False
+    ARCHIVE_NOTIFICATIONS_ENABLED = False
+    NOTIFY_PATRONS_ON_ACTION = False
+    UPDATE_CHECK_ENABLED = False
 
 
 _CONFIGS = {

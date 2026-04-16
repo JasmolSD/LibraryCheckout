@@ -72,11 +72,11 @@
                           {% else %}text-indigo-200 hover:bg-white/10 hover:text-white{% endif %}">
                     Checkout
                 </a>
-                <a href="/history"
+                <a href="/catalog"
                    class="px-3 py-1.5 rounded-lg transition-colors
-                          {% if request.endpoint == 'history_page' %}bg-white/20 text-white
+                          {% if request.endpoint == 'catalog_page' %}bg-white/20 text-white
                           {% else %}text-indigo-200 hover:bg-white/10 hover:text-white{% endif %}">
-                    History
+                    Catalog
                 </a>
                 <a href="/register"
                    class="px-3 py-1.5 rounded-lg transition-colors
@@ -84,11 +84,11 @@
                           {% else %}text-indigo-200 hover:bg-white/10 hover:text-white{% endif %}">
                     Register
                 </a>
-                <a href="/books"
+                <a href="/history"
                    class="px-3 py-1.5 rounded-lg transition-colors
-                          {% if request.endpoint == 'books_page' %}bg-white/20 text-white
+                          {% if request.endpoint == 'history_page' %}bg-white/20 text-white
                           {% else %}text-indigo-200 hover:bg-white/10 hover:text-white{% endif %}">
-                    Books
+                    History
                 </a>
                 <a href="/stats"
                    class="px-3 py-1.5 rounded-lg transition-colors
@@ -105,6 +105,42 @@
             </nav>
         </div>
     </header>
+
+    <!-- ── Update-available banner ──────────────────────────── -->
+    <div x-data="updateCheckBanner()" x-init="init()"
+         x-show="shouldShow"
+         x-transition
+         class="relative z-10 bg-amber-50 border-b border-amber-200 no-print"
+         style="display:none">
+        <div class="max-w-7xl mx-auto px-6 py-2 flex items-center justify-between gap-3 text-sm">
+            <div class="flex items-center gap-2 text-amber-800 min-w-0">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+                </svg>
+                <span class="font-medium truncate">
+                    Update available:
+                    <span class="font-mono" x-text="'v' + info.latest_version"></span>
+                    <span class="text-amber-600 ml-1"
+                          x-text="'(you have v' + info.current_version + ')'"></span>
+                </span>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <a :href="info.release_url"
+                   target="_blank"
+                   rel="noopener"
+                   class="bg-amber-600 text-white text-xs font-medium px-3 py-1 rounded-lg
+                          hover:bg-amber-700 transition-colors">
+                    View release →
+                </a>
+                <button @click="dismiss()"
+                        class="text-amber-700 hover:text-amber-900 text-xs p-1 rounded hover:bg-amber-100"
+                        title="Dismiss until the next release">
+                    ✕
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- ── Page content ─────────────────────────────────────── -->
     <main class="relative z-0 flex-1 max-w-7xl w-full mx-auto px-6 py-8">
@@ -123,6 +159,53 @@
             </span>
         </div>
     </footer>
+
+    <!-- Update-banner Alpine component (shared across all pages) -->
+    <script>
+        /**
+         * Polls /api/update-check once on page load and shows a banner
+         * when a newer GitHub release is available. Dismissals are
+         * stored per-latest-version in localStorage so clicking ✕ hides
+         * the banner until the next release.
+         */
+        function updateCheckBanner() {
+            return {
+                info: { update_available: false, current_version: '', latest_version: '' },
+                dismissed: false,
+
+                get shouldShow() {
+                    return this.info.update_available && !this.dismissed;
+                },
+
+                async init() {
+                    try {
+                        const r = await fetch('/api/update-check');
+                        if (!r.ok) return;
+                        const data = await r.json();
+                        this.info = data;
+                        if (data.update_available) {
+                            // Hide if the user already dismissed this exact version
+                            const key = 'libcheckout:update-dismissed';
+                            if (localStorage.getItem(key) === data.latest_version) {
+                                this.dismissed = true;
+                            }
+                        }
+                    } catch {
+                        // Network errors are silent — the banner just doesn't show
+                    }
+                },
+
+                dismiss() {
+                    this.dismissed = true;
+                    try {
+                        localStorage.setItem('libcheckout:update-dismissed', this.info.latest_version || '');
+                    } catch {
+                        /* localStorage disabled — dismissal is per-session only */
+                    }
+                },
+            };
+        }
+    </script>
 
     {% block scripts %}{% endblock %}
 </body>

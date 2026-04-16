@@ -15,6 +15,8 @@ class TestStats:
         data = r.get_json()
         assert data["total_patrons"] == 0
         assert data["total_books"] == 0
+        assert data["active_titles"] == 0
+        assert data["total_copies"] == 0
         assert data["active_checkouts"] == 0
         assert data["overdue_items"] == 0
         assert data["total_checkout_events"] == 0
@@ -31,7 +33,42 @@ class TestStats:
     def test_stats_counts_book_added_to_catalog(self, client):
         client.post("/api/books/", json={"barcode": "9780451524935", "title": "1984"})
         r = client.get("/api/stats")
-        assert r.get_json()["total_books"] == 1
+        data = r.get_json()
+        assert data["total_books"] == 1
+        assert data["total_copies"] == 1
+
+    def test_stats_total_books_counts_ids_not_copies(self, client):
+        """total_books is a count of unique Book rows, not a sum of quantities."""
+        client.post(
+            "/api/books/",
+            json={"barcode": "9780451524935", "title": "1984", "quantity": 5},
+        )
+        client.post(
+            "/api/books/",
+            json={"barcode": "0451524934", "title": "Animal Farm", "quantity": 3},
+        )
+        data = client.get("/api/stats").get_json()
+        assert data["total_books"] == 2  # two unique IDs
+        assert data["total_copies"] == 8  # 5 + 3 physical copies
+
+    def test_stats_active_titles_excludes_archived(self, client):
+        """active_titles counts non-archived book rows; total_books counts everything."""
+        client.post("/api/books/", json={"barcode": "9780451524935", "title": "1984"})
+        client.post("/api/books/", json={"barcode": "0451524934", "title": "Animal Farm"})
+        client.post("/api/books/9780451524935/archive")
+
+        data = client.get("/api/stats?refresh=1").get_json()
+        assert data["total_books"] == 2  # both rows still exist
+        assert data["active_titles"] == 1  # one archived
+
+    def test_stats_total_copies_tracks_inventory_updates(self, client):
+        client.post(
+            "/api/books/",
+            json={"barcode": "9780451524935", "quantity": 2},
+        )
+        assert client.get("/api/stats?refresh=1").get_json()["total_copies"] == 2
+        client.post("/api/books/9780451524935/quantity", json={"total_copies": 7})
+        assert client.get("/api/stats?refresh=1").get_json()["total_copies"] == 7
 
     def test_stats_active_checkout_increments_count(self, client, patron):
         client.post(

@@ -81,6 +81,30 @@ def lookup_isbn():
     )
 
 
+@bp.get("/search")
+def search_books():
+    """Search the catalog by barcode prefix, title, or author.
+
+    Query parameters:
+        q (str): Search query.  A trailing ``*`` forces a strict
+            barcode-prefix match (e.g. ``456000034*``).
+        limit (int, optional): Maximum results (default 20, max 100).
+
+    Returns:
+        200 with ``[{barcode, title, author, ...}, ...]`` on success.
+        400 if ``q`` is missing.
+    """
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify({"error": "Query parameter 'q' is required"}), 400
+    try:
+        limit = min(100, max(1, int(request.args.get("limit", 20))))
+    except (ValueError, TypeError):
+        limit = 20
+    books = checkout_service.search_books(q, limit=limit)
+    return jsonify([b.to_dict() for b in books])
+
+
 @bp.get("/<barcode>")
 def get_book(barcode):
     """Look up a book by barcode and return its details including loan status.
@@ -105,6 +129,7 @@ def add_book():
         author (str, optional): Author name(s).
         category (str, optional): One of book / dvd / audiobook / magazine /
             ebook / other.  Defaults to ``"book"``.
+        quantity (int, optional): Number of physical copies to add (default 1).
 
     Returns:
         201 with the new book JSON on success.
@@ -112,13 +137,45 @@ def add_book():
     """
     data = request.get_json() or {}
     try:
+        quantity = int(data.get("quantity", 1))
+    except (ValueError, TypeError):
+        return jsonify({"error": "quantity must be an integer"}), 400
+    try:
         book = checkout_service.add_book_to_catalog(
             barcode=data.get("barcode", ""),
             title=data.get("title"),
             author=data.get("author"),
             category=data.get("category", "book"),
+            quantity=quantity,
         )
         return jsonify(book.to_dict()), 201
+    except ValidationError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@bp.post("/<barcode>/quantity")
+def update_quantity(barcode):
+    """Update the total number of physical copies for an existing book.
+
+    Request body (JSON):
+        total_copies (int): New total number of copies. Cannot be less than
+            the number of copies currently checked out.
+
+    Returns:
+        200 with book JSON on success.
+        400 ``{"error": "..."}`` on validation failure.
+    """
+    data = request.get_json() or {}
+    raw = data.get("total_copies")
+    if raw is None:
+        return jsonify({"error": "total_copies is required"}), 400
+    try:
+        total_copies = int(raw)
+    except (ValueError, TypeError):
+        return jsonify({"error": "total_copies must be an integer"}), 400
+    try:
+        book = checkout_service.update_book_quantity(barcode, total_copies)
+        return jsonify(book.to_dict())
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400
 

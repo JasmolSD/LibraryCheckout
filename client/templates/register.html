@@ -1,10 +1,26 @@
 {% extends "base.html" %}
-{% block title %}Register Patron{% endblock %}
+{% block title %}Register{% endblock %}
 
 {% block content %}
 <div x-data="registerApp()" x-init="init()" class="max-w-lg mx-auto">
 
-    <div class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-6">
+    <!-- Tab switcher -->
+    <div class="flex gap-1 bg-indigo-600 rounded-xl p-1 mb-5">
+        <button @click="tab = 'patron'"
+                :class="tab === 'patron' ? 'bg-white text-indigo-700' : 'text-indigo-100 hover:bg-white/10'"
+                class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all">
+            Patron
+        </button>
+        <button @click="tab = 'book'"
+                :class="tab === 'book' ? 'bg-white text-indigo-700' : 'text-indigo-100 hover:bg-white/10'"
+                class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all">
+            Item
+        </button>
+    </div>
+
+    <!-- ══ Patron registration ══════════════════════════════════ -->
+    <div x-show="tab === 'patron'"
+         class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-6">
 
         <!-- Header -->
         <div class="flex items-center gap-3 mb-6">
@@ -21,13 +37,65 @@
         </div>
 
         <!-- Error banner -->
-        <div x-show="errorMsg"
+        <div x-show="patronError"
              class="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-700"
-             x-text="errorMsg">
+             x-text="patronError">
+        </div>
+
+        <!-- Success panel: shown after a successful registration so the
+             librarian can print the patron card before continuing. -->
+        <div x-show="patronRegistered" x-transition class="mb-4 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 mt-0.5 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                </svg>
+                <div class="flex-1">
+                    <p class="font-semibold text-emerald-800 text-sm">Registration successful!</p>
+                    <p class="text-xs text-emerald-700 mt-0.5">
+                        <span x-text="patronRegistered && patronRegistered.name"></span>
+                        — card
+                        <span class="font-mono" x-text="patronRegistered && patronRegistered.card_number"></span>
+                    </p>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-2 mt-4">
+                <button type="button"
+                        @click="printPatronCard()"
+                        class="flex-1 min-w-[140px] bg-slate-800 text-white py-2 rounded-lg text-sm font-medium
+                               hover:bg-slate-900 transition-colors flex items-center justify-center gap-1.5">
+                    Print Patron Card
+                </button>
+                <button type="button"
+                        @click="emailPatronCard()"
+                        :disabled="emailSending || !(patronRegistered && patronRegistered.email)"
+                        :title="(patronRegistered && patronRegistered.email)
+                            ? 'Email the card to ' + patronRegistered.email
+                            : 'No email on file for this patron'"
+                        class="flex-1 min-w-[140px] bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium
+                               hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed
+                               transition-colors flex items-center justify-center gap-1.5">
+                    <span x-show="emailSending" class="spinner"></span>
+                    <span x-text="emailSending ? 'Sending…' : 'Email to Patron'"></span>
+                </button>
+                <button type="button"
+                        @click="finishPatronRegistration()"
+                        class="flex-1 min-w-[140px] bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium
+                               hover:bg-indigo-700 transition-colors">
+                    Continue to Checkout →
+                </button>
+            </div>
+
+            <!-- Email status line -->
+            <p x-show="emailStatus === 'sent'"
+               class="mt-3 text-xs text-emerald-700"
+               x-text="'✓ ' + emailMessage"></p>
+            <p x-show="emailStatus === 'error'"
+               class="mt-3 text-xs text-rose-700"
+               x-text="'✕ ' + emailMessage"></p>
         </div>
 
         <!-- Form -->
-        <form @submit.prevent="submit()" class="space-y-4">
+        <form x-show="!patronRegistered" @submit.prevent="submitPatron()" class="space-y-4">
 
             <!-- Library card number (auto-generated) -->
             <div>
@@ -35,7 +103,7 @@
                     Library Card Number
                 </label>
                 <input id="reg-card"
-                       x-model="form.card_number"
+                       x-model="patronForm.card_number"
                        type="text"
                        readonly
                        autocomplete="off"
@@ -52,7 +120,7 @@
                         Last Name <span class="text-rose-500">*</span>
                     </label>
                     <input id="reg-last"
-                           x-model="form.last_name"
+                           x-model="patronForm.last_name"
                            type="text"
                            placeholder="Smith"
                            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm
@@ -63,7 +131,7 @@
                         First Name <span class="text-rose-500">*</span>
                     </label>
                     <input id="reg-first"
-                           x-model="form.first_name"
+                           x-model="patronForm.first_name"
                            type="text"
                            placeholder="Jane"
                            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm
@@ -77,7 +145,7 @@
                     Middle Name <span class="text-slate-400 font-normal">(optional)</span>
                 </label>
                 <input id="reg-middle"
-                       x-model="form.middle_name"
+                       x-model="patronForm.middle_name"
                        type="text"
                        placeholder="Marie"
                        class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm
@@ -90,7 +158,7 @@
                     Date of Birth <span class="text-rose-500">*</span>
                 </label>
                 <input id="reg-dob"
-                       x-model="form.birth_date"
+                       x-model="patronForm.birth_date"
                        type="date"
                        class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm
                               focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
@@ -102,7 +170,7 @@
                     Email <span class="text-slate-400 font-normal">(optional)</span>
                 </label>
                 <input id="reg-email"
-                       x-model="form.email"
+                       x-model="patronForm.email"
                        type="email"
                        placeholder="jane.smith@example.com"
                        class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm
@@ -115,11 +183,11 @@
                     Phone <span class="text-slate-400 font-normal">(optional)</span>
                 </label>
                 <input id="reg-phone"
-                       x-model="form.phone"
+                       x-model="patronForm.phone"
                        type="tel"
                        placeholder="(555) 123-4567"
                        class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm
-                              focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                  focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
             </div>
 
             <!-- Actions -->
@@ -130,15 +198,195 @@
                     Cancel
                 </a>
                 <button type="submit"
-                        :disabled="submitting"
+                        :disabled="patronSubmitting"
                         class="flex-1 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium
                                hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed
                                transition-colors flex items-center justify-center gap-2">
-                    <span x-show="submitting" class="spinner"></span>
-                    <span x-text="submitting ? 'Registering…' : 'Register Patron'"></span>
+                    <span x-show="patronSubmitting" class="spinner"></span>
+                    <span x-text="patronSubmitting ? 'Registering…' : 'Register Patron'"></span>
                 </button>
             </div>
         </form>
+    </div>
+
+    <!-- ══ Book registration ════════════════════════════════════ -->
+    <div x-show="tab === 'book'"
+         class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-6">
+
+        <!-- Header -->
+        <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.966 8.966 0 00-6 2.292m0-14.25v14.25"/>
+                </svg>
+            </div>
+            <div>
+                <h2 class="font-bold text-lg text-slate-900">Add Item to Catalog</h2>
+                <p class="text-sm text-slate-400">Books, DVDs, audiobooks, magazines, eBooks and more.</p>
+            </div>
+        </div>
+
+        <!-- Success banner -->
+        <div x-show="bookSuccess"
+             x-transition
+             class="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-700 flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+            </svg>
+            <span x-text="bookSuccess"></span>
+        </div>
+
+        <!-- Error banner -->
+        <div x-show="bookError"
+             x-transition
+             class="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-700"
+             x-text="bookError">
+        </div>
+
+        <form @submit.prevent="submitBook()" class="space-y-4">
+
+            <!-- ISBN / Barcode -->
+            <div>
+                <label for="isbn" class="block text-sm font-medium text-slate-700 mb-1">
+                    ISBN / Barcode <span class="text-rose-500">*</span>
+                </label>
+                <div class="relative">
+                    <input id="isbn"
+                           x-model="bookForm.barcode"
+                           @input="sanitizeBarcode($event)"
+                           @change="onIsbnChange()"
+                           @keydown.enter.prevent="onIsbnChange()"
+                           type="text"
+                           inputmode="numeric"
+                           maxlength="14"
+                           placeholder="Scan or type ISBN-10, ISBN-13, or 14-digit barcode"
+                           autocomplete="off"
+                           class="w-full rounded-lg px-3 py-2.5 font-mono text-sm border pr-10
+                                  focus:ring-2 focus:border-indigo-500"
+                           :class="bookBarcodeInvalid
+                               ? 'border-rose-400 ring-1 ring-rose-300 focus:ring-rose-400'
+                               : 'border-slate-300 focus:ring-indigo-500'" />
+                    <!-- Lookup spinner -->
+                    <div x-show="bookLookingUp"
+                         class="absolute right-3 top-1/2 -translate-y-1/2">
+                        <svg class="w-4 h-4 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                        </svg>
+                    </div>
+                </div>
+                <p x-show="bookBarcodeInvalid"
+                   x-transition
+                   class="text-xs text-rose-600 mt-1">
+                    Only numerical values allowed (e.g. 1, 3, 35434)
+                </p>
+                <p x-show="!bookBarcodeInvalid" class="text-xs mt-1"
+                   :class="{
+                       'text-emerald-600': bookLookupStatus === 'found',
+                       'text-slate-400':   bookLookupStatus === 'not_found',
+                       'text-amber-600':   bookLookupStatus === 'unavailable',
+                       'text-slate-400':   !bookLookupStatus,
+                   }">
+                    <template x-if="bookLookupStatus === 'found'">
+                        <span>&#10003; Book details found and auto-filled — review before saving.</span>
+                    </template>
+                    <template x-if="bookLookupStatus === 'not_found'">
+                        <span>No metadata found for this ISBN — fill in details manually.</span>
+                    </template>
+                    <template x-if="bookLookupStatus === 'unavailable'">
+                        <span>Metadata service unavailable — fill in details manually.</span>
+                    </template>
+                    <template x-if="!bookLookupStatus">
+                        <span>ISBN-10 (10 digits), ISBN-13 (13 digits), or library barcode (14 digits).</span>
+                    </template>
+                </p>
+            </div>
+
+            <!-- Title -->
+            <div>
+                <label for="title" class="block text-sm font-medium text-slate-700 mb-1">
+                    Title <span class="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <input id="title"
+                       x-model="bookForm.title"
+                       type="text"
+                       placeholder="e.g. The Great Gatsby"
+                       class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm
+                              focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+            </div>
+
+            <!-- Author -->
+            <div>
+                <label for="author" class="block text-sm font-medium text-slate-700 mb-1">
+                    Author <span class="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <input id="author"
+                       x-model="bookForm.author"
+                       type="text"
+                       placeholder="e.g. F. Scott Fitzgerald"
+                       class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm
+                              focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+            </div>
+
+            <!-- Category + Quantity row -->
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label for="category" class="block text-sm font-medium text-slate-700 mb-1">
+                        Category
+                    </label>
+                    <select id="category"
+                            x-model="bookForm.category"
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm
+                                   focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
+                        <option value="book">Book</option>
+                        <option value="dvd">DVD</option>
+                        <option value="audiobook">Audiobook</option>
+                        <option value="magazine">Magazine</option>
+                        <option value="ebook">E-Book</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="quantity" class="block text-sm font-medium text-slate-700 mb-1">
+                        Quantity <span class="text-rose-500">*</span>
+                    </label>
+                    <input id="quantity"
+                           x-model.number="bookForm.quantity"
+                           type="number"
+                           min="1"
+                           max="999"
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm
+                                  focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                    <p class="text-xs text-slate-400 mt-1">Number of physical copies.</p>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-3 pt-2">
+                <a href="/catalog"
+                   class="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm
+                          font-medium hover:bg-slate-50 transition-colors text-center">
+                    Go to Catalog
+                </a>
+                <button type="submit"
+                        :disabled="bookSubmitting || !bookForm.barcode.trim()"
+                        class="flex-1 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium
+                               hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed
+                               transition-colors flex items-center justify-center gap-2">
+                    <span x-show="bookSubmitting" class="spinner"></span>
+                    <span x-text="bookSubmitting ? 'Saving…' : 'Add to Catalog'"></span>
+                </button>
+            </div>
+        </form>
+
+        <div x-show="bookSuccess" x-transition class="mt-4 text-center">
+            <button @click="resetBook()"
+                    class="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
+                + Add another item
+            </button>
+        </div>
     </div>
 </div>
 {% endblock %}

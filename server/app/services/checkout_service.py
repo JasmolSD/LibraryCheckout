@@ -9,6 +9,14 @@ from sqlalchemy import func
 
 from ..database import db
 from ..models import Book, Loan, Patron, Transaction
+from .email_service import send_notification_email, send_patron_action_email
+from .receipt_service import (
+    ActionKind,
+    build_patron_action_email,
+    build_patron_card_pdf,
+    build_patron_welcome_email,
+    build_receipt_pdf,
+)
 from .validators import (
     ValidationError,
     validate_barcode,
@@ -19,6 +27,52 @@ from .validators import (
 def _utcnow() -> datetime:
     """Return current UTC time as a naive datetime (SQLite-compatible)."""
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _fmt_local(dt: datetime | None) -> str:
+    """Render a stored (naive, UTC) datetime as a local-time string.
+
+    Used for the archival notification emails so the library staff see
+    human-readable local timestamps instead of UTC.
+    """
+    if dt is None:
+        return "—"
+    # Stored values are naive UTC. Attach UTC then convert to the
+    # machine's local timezone.
+    local = dt.replace(tzinfo=UTC).astimezone()
+    return local.strftime("%Y-%m-%d %I:%M %p %Z").strip()
+
+
+def _notify_patron_of_action(action: ActionKind, patron: Patron, loan: Loan) -> None:
+    """Fire a confirmation email to the patron about a checkout / renew / return.
+
+    No-op when the patron has no email on file, SMTP isn't set, or the
+    ``NOTIFY_PATRONS`` flag is disabled. Attaches a PDF receipt of the
+    patron's currently-active loans (except on a return that leaves
+    them with no items).
+    """
+    if not patron.email:
+        return
+    # Remaining active loans AFTER the action
+    remaining = [ln for ln in patron.loans if ln.returned_at is None]
+    subject, body = build_patron_action_email(action, patron, loan, remaining)
+
+    pdf_bytes: bytes | None = None
+    pdf_filename: str | None = None
+    if remaining:
+        try:
+            pdf_bytes = build_receipt_pdf(patron, remaining)
+            pdf_filename = f"receipt_{patron.card_number[-4:]}.pdf"
+        except Exception as exc:  # pragma: no cover — ReportLab edge cases
+            current_app.logger.warning("Receipt PDF build failed for email: %s", exc)
+
+    send_patron_action_email(
+        to=patron.email,
+        subject=subject,
+        body=body,
+        pdf_bytes=pdf_bytes,
+        pdf_filename=pdf_filename,
+    )
 
 
 # ── Stats cache ──────────────────────────────────────────────────────────────
@@ -79,6 +133,144 @@ def get_or_create_patron(
     db.session.add(patron)
     db.session.commit()
     current_app.logger.info("Registered new patron %s", patron.masked_card)
+
+    # Archival notification — fire-and-forget, background thread.
+    # Only sent for brand-new registrations, not for get-or-create hits.
+    library_name = current_app.config.get("LIBRARY_NAME", "Library")
+    library_branch = current_app.config.get("LIBRARY_BRANCH", "")
+    signature = f"— {library_name}" + (f" / {library_branch}" if library_branch else "")
+    send_notification_email(
+        subject=f"[Library Patron] New — {patron.name} ({patron.card_number})",
+        body=(
+            f"A new patron was registered.\n\n"
+            f"Card:    {patron.card_number}\n"
+            f"Name:    {patron.name}\n"
+            f"DOB:     {patron.birth_date.isoformat() if patron.birth_date else '—'}\n"
+            f"Email:   {patron.email or '—'}\n"
+            f"Phone:   {patron.phone or '—'}\n\n"
+            f"Registered: {_fmt_local(patron.created_at)}\n\n"
+            f"{signature}\n"
+        ),
+        folder=current_app.config.get("LIBRARY_PATRONS_LABEL", "Library Patrons"),
+    )
+
+    # Welcome email to the new patron — fire-and-forget, background thread.
+    # Skips silently when the patron has no email, SMTP isn't set, or the
+    # NOTIFY_PATRONS flag is off.
+    if patron.email:
+        try:
+            pdf_bytes = build_patron_card_pdf(patron)
+            pdf_filename = f"library_card_{patron.card_number}.pdf"
+        except Exception as exc:  # pragma: no cover — ReportLab edge cases
+            current_app.logger.warning("Patron card PDF build failed for welcome: %s", exc)
+            pdf_bytes = None
+            pdf_filename = None
+        welcome_subject, welcome_body = build_patron_welcome_email(patron)
+        send_patron_action_email(
+            to=patron.email,
+            subject=welcome_subject,
+            body=welcome_body,
+            pdf_bytes=pdf_bytes,
+            pdf_filename=pdf_filename,
+        )
+
+    return patron
+
+
+def update_patron(
+    card: str,
+    *,
+    first_name: str | None = None,
+    last_name: str | None = None,
+    middle_name: str | None = None,
+    birth_date: date | None = None,
+    email: str | None = None,
+    phone: str | None = None,
+) -> Patron:
+    """Edit a patron's profile in place.
+
+    Only non-None arguments are applied. Pass an empty string for
+    ``middle_name`` / ``email`` / ``phone`` to clear those optional
+    fields. Names are uppercased to match the stored format.
+
+    Raises:
+        ValidationError: If the card is invalid, the patron is not
+            found, or first/last name is blanked out (they're required).
+    """
+    card = validate_card(card)
+    patron = Patron.query.filter_by(card_number=card).first()
+    if not patron:
+        raise ValidationError("Patron not found")
+
+    # Snapshot the "before" state so we can compute a diff for the
+    # archival notification email once the update commits.
+    before = {
+        "first_name": patron.first_name,
+        "last_name": patron.last_name,
+        "middle_name": patron.middle_name,
+        "birth_date": patron.birth_date.isoformat() if patron.birth_date else None,
+        "email": patron.email,
+        "phone": patron.phone,
+    }
+
+    if first_name is not None:
+        stripped = first_name.strip()
+        if not stripped:
+            raise ValidationError("First name cannot be empty")
+        patron.first_name = stripped.upper()
+    if last_name is not None:
+        stripped = last_name.strip()
+        if not stripped:
+            raise ValidationError("Last name cannot be empty")
+        patron.last_name = stripped.upper()
+    if middle_name is not None:
+        cleaned = middle_name.strip()
+        patron.middle_name = cleaned.upper() if cleaned else None
+    if birth_date is not None:
+        patron.birth_date = birth_date
+    if email is not None:
+        cleaned = email.strip()
+        patron.email = cleaned or None
+    if phone is not None:
+        cleaned = phone.strip()
+        patron.phone = cleaned or None
+
+    after = {
+        "first_name": patron.first_name,
+        "last_name": patron.last_name,
+        "middle_name": patron.middle_name,
+        "birth_date": patron.birth_date.isoformat() if patron.birth_date else None,
+        "email": patron.email,
+        "phone": patron.phone,
+    }
+    diffs = [(k, before[k], after[k]) for k in before if before[k] != after[k]]
+
+    db.session.commit()
+    current_app.logger.info("Updated patron %s", patron.masked_card)
+
+    # Archival notification — only when something actually changed.
+    if diffs:
+        library_name = current_app.config.get("LIBRARY_NAME", "Library")
+        library_branch = current_app.config.get("LIBRARY_BRANCH", "")
+        signature = f"— {library_name}" + (f" / {library_branch}" if library_branch else "")
+
+        def _fmt(val):
+            return "None" if val is None else f'"{val}"'
+
+        change_lines = "\n".join(f"  {k}: {_fmt(b)} → {_fmt(a)}" for k, b, a in diffs)
+        send_notification_email(
+            subject=f"[Library Patron] Updated — {patron.name} ({patron.card_number})",
+            body=(
+                f"A patron profile was edited.\n\n"
+                f"Card:    {patron.card_number}\n"
+                f"Name:    {patron.name}\n\n"
+                f"Changes:\n{change_lines}\n\n"
+                f"Updated: {_fmt_local(_utcnow())}\n\n"
+                f"{signature}\n"
+            ),
+            folder=current_app.config.get("LIBRARY_PATRONS_LABEL", "Library Patrons"),
+        )
+
     return patron
 
 
@@ -87,9 +279,16 @@ def add_book_to_catalog(
     title: str | None = None,
     author: str | None = None,
     category: str = "book",
+    quantity: int = 1,
 ) -> Book:
-    """Add a new item to the catalog without checking it out."""
+    """Add a new item to the catalog without checking it out.
+
+    Args:
+        quantity: Number of physical copies to add to inventory (default 1).
+    """
     barcode = validate_barcode(barcode)
+    if quantity < 1:
+        raise ValidationError("Quantity must be at least 1")
     if Book.query.filter_by(barcode=barcode).first():
         raise ValidationError(f"Item {barcode} is already in the catalog")
     book = Book(
@@ -97,10 +296,35 @@ def add_book_to_catalog(
         title=title.strip() if title and title.strip() else None,
         author=author.strip() if author and author.strip() else None,
         category=category or "book",
+        total_copies=quantity,
     )
     db.session.add(book)
     db.session.commit()
-    current_app.logger.info("Added to catalog: %s", barcode)
+    current_app.logger.info("Added to catalog: %s (qty=%d)", barcode, quantity)
+    return book
+
+
+def update_book_quantity(barcode: str, total_copies: int) -> Book:
+    """Set the total number of physical copies for an existing book.
+
+    Raises:
+        ValidationError: if the new total is less than the number of copies
+            currently checked out, or if the barcode is unknown.
+    """
+    barcode = validate_barcode(barcode)
+    if total_copies < 0:
+        raise ValidationError("Quantity cannot be negative")
+    book = Book.query.filter_by(barcode=barcode).first()
+    if not book:
+        raise ValidationError(f"Unknown item {barcode}")
+    out = book.checked_out_count
+    if total_copies < out:
+        raise ValidationError(
+            f"Cannot set quantity to {total_copies} — {out} copy/copies currently checked out"
+        )
+    book.total_copies = total_copies
+    db.session.commit()
+    current_app.logger.info("Updated quantity for %s to %d", barcode, total_copies)
     return book
 
 
@@ -136,20 +360,98 @@ def overdue_items() -> list[dict]:
     return result
 
 
+def search_books(query: str, limit: int = 20) -> list[Book]:
+    """Search the catalog by barcode prefix, title, or author.
+
+    Wildcard behaviour: if ``query`` ends with ``*`` the remainder is
+    treated as a strict barcode prefix and title/author matching is
+    suppressed (e.g. ``456000034*`` → all books whose barcode starts
+    with ``456000034``).
+
+    Without a wildcard, the query matches against:
+      * barcode (starts-with)
+      * title (contains, case-insensitive via SQLite default LIKE)
+      * author (contains)
+
+    Active books are ordered ahead of archived ones, then by title.
+    """
+    q = query.strip()
+    if not q:
+        return []
+
+    has_wildcard = q.endswith("*")
+    if has_wildcard:
+        prefix = q.rstrip("*")
+        if not prefix:
+            # Bare "*" returns everything, bounded by limit
+            return Book.query.order_by(Book.is_active.desc(), Book.title.asc()).limit(limit).all()
+        return (
+            Book.query.filter(Book.barcode.startswith(prefix))
+            .order_by(Book.is_active.desc(), Book.barcode.asc())
+            .limit(limit)
+            .all()
+        )
+
+    # Title / author are mixed-case; use LOWER() so the match is
+    # case-insensitive on both SQLite (where LIKE is already case-
+    # insensitive for ASCII) and PostgreSQL (where LIKE is case-sensitive).
+    q_lower = q.lower()
+    return (
+        Book.query.filter(
+            db.or_(
+                Book.barcode.startswith(q),
+                func.lower(Book.title).contains(q_lower),
+                func.lower(Book.author).contains(q_lower),
+            )
+        )
+        .order_by(Book.is_active.desc(), Book.title.asc())
+        .limit(limit)
+        .all()
+    )
+
+
 def book_details(barcode: str) -> dict:
-    """Return details about a book including its current loan status."""
+    """Return details about a book including its current inventory and loan status.
+
+    ``active_loans`` is aggregated by patron: a patron holding multiple
+    copies of the same book appears once with ``copies_count`` and a
+    ``copies`` list of the individual loan records (earliest first).
+    """
     barcode = validate_barcode(barcode)
     book = Book.query.filter_by(barcode=barcode).first()
     if not book:
         raise ValidationError(f"Unknown item {barcode}")
 
-    active_loan = Loan.query.filter_by(book_id=book.id, returned_at=None).first()
+    loans = (
+        Loan.query.filter_by(book_id=book.id, returned_at=None)
+        .order_by(Loan.checked_out_at.asc())
+        .all()
+    )
+
+    # Group loans by patron, preserving first-seen order.
+    grouped: dict[int, dict] = {}
+    for loan in loans:
+        bucket = grouped.get(loan.patron_id)
+        if bucket is None:
+            bucket = {
+                "patron_name": loan.patron.name,
+                "card_number": loan.patron.card_number,
+                "card_masked": loan.patron.masked_card,
+                "copies_count": 0,
+                "copies": [],
+            }
+            grouped[loan.patron_id] = bucket
+        bucket["copies_count"] += 1
+        bucket["copies"].append(
+            {
+                "checked_out_at": loan.checked_out_at.isoformat(),
+                "due_date": loan.due_date.isoformat() if loan.due_date else None,
+            }
+        )
+
     result = book.to_dict()
-    result["checked_out"] = active_loan is not None
-    if active_loan:
-        result["checked_out_to"] = active_loan.patron.name
-        result["checked_out_card"] = active_loan.patron.card_number
-        result["due_date"] = active_loan.due_date.isoformat() if active_loan.due_date else None
+    result["checked_out"] = len(loans) > 0
+    result["active_loans"] = list(grouped.values())
     return result
 
 
@@ -160,7 +462,7 @@ def get_or_create_book(barcode: str, title: str | None = None, category: str = "
         if title and not book.title:
             book.title = title
         return book
-    book = Book(barcode=barcode, title=title, category=category)
+    book = Book(barcode=barcode, title=title, category=category, total_copies=1)
     db.session.add(book)
     db.session.flush()
     return book
@@ -188,9 +490,11 @@ def checkout_item(
     book = get_or_create_book(barcode, title=title, category=category)
     if not book.is_active:
         raise ValidationError(f"Item {barcode} is archived — reactivate before checking out")
-    existing = Loan.query.filter_by(book_id=book.id, returned_at=None).first()
-    if existing:
-        raise ValidationError(f"Item {barcode} is already checked out")
+
+    if book.available_copies <= 0:
+        raise ValidationError(
+            f"No copies of item {barcode} are available " f"(all {book.total_copies} checked out)"
+        )
 
     now = _utcnow()
     due = now + timedelta(days=loan_days)
@@ -211,20 +515,56 @@ def checkout_item(
     current_app.logger.info(
         "Checkout: patron=%s book=%s loan_days=%d", patron.masked_card, barcode, loan_days
     )
+
+    # Archival notification — fire-and-forget, background thread
+    library_name = current_app.config.get("LIBRARY_NAME", "Library")
+    library_branch = current_app.config.get("LIBRARY_BRANCH", "")
+    signature = f"— {library_name}" + (f" / {library_branch}" if library_branch else "")
+    title_display = f'"{book.title}"' if book.title else f"barcode {book.barcode}"
+    send_notification_email(
+        subject=f"[Library Receipt] {patron.name} — {title_display}",
+        body=(
+            f"A checkout was recorded.\n\n"
+            f"Patron:  {patron.name}\n"
+            f"Card:    {patron.card_number}\n"
+            f"Email:   {patron.email or '—'}\n\n"
+            f"Item:    {title_display}\n"
+            f"Author:  {book.author or '—'}\n"
+            f"Barcode: {book.barcode}\n"
+            f"Category: {book.category}\n\n"
+            f"Loan days: {loan_days}\n"
+            f"Checked out: {_fmt_local(now)}\n"
+            f"Due date:    {_fmt_local(due)}\n\n"
+            f"{signature}\n"
+        ),
+        folder=current_app.config.get("LIBRARY_RECEIPTS_LABEL", "Library Receipts"),
+    )
+
+    # Patron-facing confirmation email (fire-and-forget)
+    _notify_patron_of_action("checkout", patron, loan)
+
     return loan
 
 
-def return_item(barcode: str) -> Loan:
-    """Mark the active loan for an item as returned.
+def return_item(barcode: str, card: str | None = None) -> Loan:
+    """Mark an active loan for an item as returned.
 
-    Sets returned_at on the Loan and logs a Transaction audit entry.
+    When multiple copies of the same barcode are on loan simultaneously,
+    passing ``card`` returns that specific patron's copy; otherwise the
+    oldest active loan for the barcode is returned.
     """
     barcode = validate_barcode(barcode)
     book = Book.query.filter_by(barcode=barcode).first()
     if not book:
         raise ValidationError(f"Unknown item {barcode}")
 
-    active = Loan.query.filter_by(book_id=book.id, returned_at=None).first()
+    query = Loan.query.filter_by(book_id=book.id, returned_at=None)
+    if card:
+        patron = Patron.query.filter_by(card_number=validate_card(card)).first()
+        if not patron:
+            raise ValidationError("Patron not found")
+        query = query.filter_by(patron_id=patron.id)
+    active = query.order_by(Loan.checked_out_at.asc()).first()
     if not active:
         raise ValidationError(f"Item {barcode} is not currently checked out")
 
@@ -236,19 +576,30 @@ def return_item(barcode: str) -> Loan:
     db.session.commit()
 
     current_app.logger.info("Return: book=%s", barcode)
+
+    # Patron-facing confirmation email (fire-and-forget)
+    _notify_patron_of_action("return", active.patron, active)
+
     return active
 
 
-def renew_item(barcode: str, loan_days: int = 14) -> Loan:
+def renew_item(barcode: str, loan_days: int = 14, card: str | None = None) -> Loan:
     """Extend the due date of an active loan from today.
 
-    Updates the Loan's due_date and logs a Transaction audit entry.
+    When multiple copies are on loan, passing ``card`` targets that specific
+    patron's copy; otherwise the oldest active loan for the barcode is renewed.
     """
     barcode = validate_barcode(barcode)
     book = Book.query.filter_by(barcode=barcode).first()
     if not book:
         raise ValidationError(f"Unknown item {barcode}")
-    active = Loan.query.filter_by(book_id=book.id, returned_at=None).first()
+    query = Loan.query.filter_by(book_id=book.id, returned_at=None)
+    if card:
+        patron = Patron.query.filter_by(card_number=validate_card(card)).first()
+        if not patron:
+            raise ValidationError("Patron not found")
+        query = query.filter_by(patron_id=patron.id)
+    active = query.order_by(Loan.checked_out_at.asc()).first()
     if not active:
         raise ValidationError(f"Item {barcode} is not currently checked out")
 
@@ -261,6 +612,10 @@ def renew_item(barcode: str, loan_days: int = 14) -> Loan:
     db.session.commit()
 
     current_app.logger.info("Renew: book=%s loan_days=%d", barcode, loan_days)
+
+    # Patron-facing confirmation email (fire-and-forget)
+    _notify_patron_of_action("renew", active.patron, active)
+
     return active
 
 
@@ -286,7 +641,12 @@ def library_stats(*, force: bool = False) -> dict:
     week_start = now - timedelta(days=7)
 
     total_patrons = Patron.query.count()
+    # Count of unique book rows (distinct titles / barcodes, incl. archived)
     total_books = Book.query.count()
+    # Count of unique book rows that are currently active (not archived)
+    active_titles = Book.query.filter(Book.is_active.is_(True)).count()
+    # Sum of physical copies across the whole catalog
+    total_copies = db.session.query(func.coalesce(func.sum(Book.total_copies), 0)).scalar() or 0
 
     active_checkouts = Loan.query.filter(Loan.returned_at.is_(None)).count()
 
@@ -328,6 +688,8 @@ def library_stats(*, force: bool = False) -> dict:
     result = {
         "total_patrons": total_patrons,
         "total_books": total_books,
+        "active_titles": active_titles,
+        "total_copies": int(total_copies),
         "active_checkouts": active_checkouts,
         "overdue_items": overdue_count,
         "total_checkout_events": total_checkout_events,
@@ -348,15 +710,23 @@ def library_stats(*, force: bool = False) -> dict:
 
 
 def search_patrons(query: str) -> list[Patron]:
-    """Search patrons by first or last name (case-insensitive partial match)."""
-    q = query.strip().upper()
-    if not q:
+    """Search patrons by name or card-number prefix.
+
+    Matches against first name, last name (case-insensitive ``contains``)
+    and card number (``starts with``).  Digit-only queries still work the
+    same way they always have for card lookups, plus now match partial
+    card numbers; text queries match names.
+    """
+    raw = query.strip()
+    if not raw:
         return []
+    q_upper = raw.upper()
     return (
         Patron.query.filter(
             db.or_(
-                Patron.last_name.contains(q),
-                Patron.first_name.contains(q),
+                Patron.last_name.contains(q_upper),
+                Patron.first_name.contains(q_upper),
+                Patron.card_number.startswith(raw),
             )
         )
         .limit(50)

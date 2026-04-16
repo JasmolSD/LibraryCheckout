@@ -11,6 +11,12 @@ from .config import get_config
 from .database import db
 from .utils.logger import setup_logging
 
+#: Application version — compared against the latest GitHub release tag
+#: by :mod:`server.app.services.update_check`.  Bump this whenever you
+#: publish a new release so the "Update available" banner triggers for
+#: older installs.  Tags on GitHub are expected to look like ``v0.1.0``.
+VERSION = "0.1.0"
+
 
 def create_app(config_name: str | None = None) -> Flask:
     """Create and configure a Flask application instance.
@@ -147,12 +153,12 @@ def create_app(config_name: str | None = None) -> Flask:
 
         return render_template("register.html")
 
-    @app.route("/books")
-    def books_page():
-        """Render the books catalog and management page."""
+    @app.route("/catalog")
+    def catalog_page():
+        """Render the catalog search and management page."""
         from flask import render_template
 
-        return render_template("books.html")
+        return render_template("catalog.html")
 
     @app.route("/stats")
     def stats_page():
@@ -183,9 +189,28 @@ def create_app(config_name: str | None = None) -> Flask:
         """
         return {"status": "ok", "branch": app.config["LIBRARY_BRANCH"]}
 
-    # Create tables on first run
+    @app.route("/api/update-check")
+    def update_check_api():
+        """Return the current version + whether a newer GitHub release exists.
+
+        Pass ``?refresh=1`` to bypass the in-memory cache.
+        """
+        from flask import jsonify, request
+
+        from .services.update_check import check_for_update
+
+        force = request.args.get("refresh") == "1"
+        return jsonify(check_for_update(force=force))
+
+    # Create tables on first run, then apply any additive column migrations
+    # so end users upgrading an older library.db don't hit "no such column".
     with app.app_context():
         db.create_all()
+        from .utils.schema import ensure_schema
+
+        added = ensure_schema(db.engine, db.metadata)
+        if added:
+            app.logger.info("Schema migration: added columns %s", ", ".join(added))
         app.logger.info("Application initialized (env=%s)", app.config["ENV"])
 
     return app

@@ -288,8 +288,8 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
             <p class="text-slate-500 text-sm mb-3 leading-relaxed">
-                Open the <a href="/books" class="text-indigo-600 hover:underline font-medium">Books</a>
-                page from the navigation bar. Scan or type the item's ISBN. The system will automatically
+                Open the <a href="/register" class="text-indigo-600 hover:underline font-medium">Register</a>
+                page from the navigation bar and choose the <strong>Book</strong> tab. Scan or type the item's ISBN. The system will automatically
                 look up the title, author, and category from Google Books. Review the auto-filled details,
                 correct anything if needed, then click <strong>Add to Catalog</strong>.
             </p>
@@ -355,6 +355,152 @@
     </div>
 </section>
 
+<!-- ── Printable patron card / email ────────────────────────── -->
+<section class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 mb-8">
+    <div class="flex items-center gap-2 mb-4">
+        <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
+            <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M3 8.689c0-.864.933-1.406 1.683-.977l7.108 4.061a1.125 1.125 0 010 1.954l-7.108
+                         4.061A1.125 1.125 0 013 16.811V8.69zM12.75 8.689c0-.864.933-1.406
+                         1.683-.977l7.108 4.061a1.125 1.125 0 010 1.954l-7.108 4.061a1.125 1.125 0
+                         01-1.683-.977V8.69z"/>
+            </svg>
+        </div>
+        <h2 class="font-semibold text-slate-800">Patron Cards &amp; Email Receipts</h2>
+    </div>
+    <p class="text-slate-500 text-sm mb-3 leading-relaxed">
+        After registering a patron, the success panel offers two printouts
+        and one email option:
+    </p>
+    <ul class="space-y-1.5 text-xs text-slate-600 mb-4">
+        <li class="flex gap-2"><span class="text-indigo-400">*</span> <strong>Print Patron Card</strong> — opens a PDF with the patron's name, library card number, and a scannable Code-128 barcode</li>
+        <li class="flex gap-2"><span class="text-indigo-400">*</span> <strong>Email to Patron</strong> — sends the same PDF to the email address on file (requires SMTP to be configured)</li>
+        <li class="flex gap-2"><span class="text-indigo-400">*</span> <strong>Continue to Checkout</strong> — drops the librarian back on the checkout screen with the new card pre-loaded</li>
+    </ul>
+    <p class="text-slate-500 text-sm mb-3 leading-relaxed">
+        On the checkout screen, when a patron has items out, an
+        <strong>Email Receipt</strong> button sits next to <strong>Print Receipt</strong>.
+        It sends the same PDF as an attachment to the patron's email. If
+        there's no email on file for the patron, the button is disabled.
+    </p>
+    <p class="text-xs text-slate-400">
+        Email features are disabled when <code class="font-mono bg-slate-100 px-1 rounded">SMTP_HOST</code>
+        is empty in your environment. See the README's <strong>Email configuration</strong> section for setup.
+    </p>
+</section>
+
+<!-- ── Editing patron info ──────────────────────────────────── -->
+<section class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 mb-8">
+    <div class="flex items-center gap-2 mb-4">
+        <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+            <svg class="w-4 h-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5
+                         4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/>
+            </svg>
+        </div>
+        <h2 class="font-semibold text-slate-800">Editing Patron Information</h2>
+    </div>
+    <p class="text-slate-500 text-sm leading-relaxed">
+        Open the <a href="/history" class="text-indigo-600 hover:underline font-medium">History</a>
+        page, look up the patron by card or name, and click the
+        <strong>Edit</strong> button next to the stats panel. You can change
+        the patron's name, date of birth, email, and phone — leave a field
+        blank to clear it, or leave it alone to preserve the existing value.
+        First and last name cannot be blanked out.
+    </p>
+</section>
+
+<!-- ── Autofill / search ────────────────────────────────────── -->
+<section class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 mb-8">
+    <div class="flex items-center gap-2 mb-4">
+        <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
+            <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+            </svg>
+        </div>
+        <h2 class="font-semibold text-slate-800">Searching &amp; Autofill</h2>
+    </div>
+    <p class="text-slate-500 text-sm mb-3 leading-relaxed">
+        Both the checkout screen's item field and the
+        <a href="/catalog" class="text-indigo-600 hover:underline font-medium">Catalog</a>
+        search box show a live autofill dropdown as you type. Each suggestion lists the
+        <strong>barcode</strong>, <strong>title</strong>, and <strong>author</strong>, along
+        with current availability (e.g. <span class="font-mono text-xs bg-slate-100 px-1 rounded">3/5 available</span>).
+    </p>
+    <div class="bg-slate-50/80 rounded-xl p-3 mb-3">
+        <p class="font-medium text-slate-700 text-sm mb-1">Keyboard navigation</p>
+        <ul class="space-y-1 text-xs text-slate-600">
+            <li>↑ / ↓ — highlight the previous / next suggestion</li>
+            <li>Enter — select the highlighted suggestion (or submit if none)</li>
+            <li>Esc — close the dropdown</li>
+        </ul>
+    </div>
+    <div class="bg-slate-50/80 rounded-xl p-3">
+        <p class="font-medium text-slate-700 text-sm mb-1">Wildcard barcode search</p>
+        <p class="text-xs text-slate-600 leading-relaxed">
+            Append <code class="font-mono bg-white border border-slate-200 px-1 rounded">*</code>
+            to a barcode prefix in the Catalog search to match every book whose barcode starts
+            with that value — e.g.
+            <code class="font-mono bg-white border border-slate-200 px-1 rounded">456000034*</code>
+            returns every item from that supplier batch. Plain queries (without
+            <code class="font-mono bg-white border border-slate-200 px-1 rounded">*</code>) also
+            match against title and author.
+        </p>
+    </div>
+</section>
+
+<!-- ── Inventory / quantity ──────────────────────────────────── -->
+<section class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 mb-8">
+    <div class="flex items-center gap-2 mb-4">
+        <div class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+            <svg class="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25
+                         2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621
+                         0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621
+                         0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/>
+            </svg>
+        </div>
+        <h2 class="font-semibold text-slate-800">Inventory &amp; Multiple Copies</h2>
+    </div>
+    <p class="text-slate-500 text-sm mb-4 leading-relaxed">
+        Every book tracks <strong>total copies</strong>, <strong>available copies</strong>,
+        and <strong>checked-out count</strong>. A book with 5 copies can be checked out to
+        up to 5 patrons at the same time — or a single patron can hold multiple copies
+        (e.g. a teacher borrowing a class set).
+    </p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+        <div>
+            <p class="font-medium text-slate-700 mb-2">When adding a book</p>
+            <ul class="space-y-1.5 text-xs text-slate-600">
+                <li class="flex gap-2"><span class="text-emerald-500">*</span> Enter a <strong>Quantity</strong> in the Add form (default 1)</li>
+                <li class="flex gap-2"><span class="text-emerald-500">*</span> The new book starts with all copies available</li>
+            </ul>
+        </div>
+        <div>
+            <p class="font-medium text-slate-700 mb-2">Adjusting inventory later</p>
+            <ul class="space-y-1.5 text-xs text-slate-600">
+                <li class="flex gap-2"><span class="text-emerald-500">*</span> Look up the book in <strong>Manage Existing Book</strong></li>
+                <li class="flex gap-2"><span class="text-emerald-500">*</span> Use <strong>Add more copies</strong> when a new shipment arrives</li>
+                <li class="flex gap-2"><span class="text-emerald-500">*</span> Use <strong>Set total copies</strong> to correct counts after a loss or withdrawal</li>
+                <li class="flex gap-2"><span class="text-emerald-500">*</span> Cannot reduce below the number currently checked out</li>
+            </ul>
+        </div>
+    </div>
+    <div class="bg-slate-50/80 rounded-xl p-3 mt-4">
+        <p class="font-medium text-slate-700 text-sm mb-1">Seeing who has a book</p>
+        <p class="text-xs text-slate-500 leading-relaxed">
+            The Manage panel lists every patron currently holding a copy, grouped by
+            patron with a <strong>copies count</strong> badge. Each row has a
+            <strong>Return 1</strong> button to return one specific copy back to
+            inventory. The inventory tiles update live.
+        </p>
+    </div>
+</section>
+
 <!-- ── Manual returns ────────────────────────────────────────── -->
 <section class="bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 mb-8">
     <div class="flex items-center gap-2 mb-4">
@@ -411,9 +557,10 @@
         <h2 class="font-semibold text-slate-800">Managing Books</h2>
     </div>
     <p class="text-slate-500 text-sm mb-3 leading-relaxed">
-        The <a href="/books" class="text-indigo-600 hover:underline font-medium">Books</a>
-        page now has two sections: <strong>Add Book</strong> for new items and
-        <strong>Manage Existing Book</strong> for looking up an existing item by barcode.
+        The <a href="/catalog" class="text-indigo-600 hover:underline font-medium">Catalog</a>
+        page lets you search for and manage existing items. New items are added from the
+        <a href="/register" class="text-indigo-600 hover:underline font-medium">Register</a>
+        page under the <strong>Book</strong> tab.
     </p>
     <p class="text-slate-600 text-sm font-medium mb-2">From the manage section you can:</p>
     <ul class="space-y-1.5 text-xs text-slate-600 mb-3">
@@ -613,14 +760,14 @@
 
     <details class="faq-item">
         <summary>
-            Do I need to add a book to the catalog before checking it out?
+            Do I need to add an item to the catalog before checking it out?
             <svg class="faq-chevron w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
             </svg>
         </summary>
         <div class="faq-answer">
             No — items are created automatically the first time their barcode is scanned on the checkout
-            screen. The <a href="/books" class="text-indigo-600 hover:underline">Books</a> page is
+            screen. The <a href="/catalog" class="text-indigo-600 hover:underline">Catalog</a> page is
             useful when you want to pre-populate the catalog with titles, authors, and categories
             <em>before</em> any checkouts occur, or to enrich existing records with ISBN metadata.
         </div>

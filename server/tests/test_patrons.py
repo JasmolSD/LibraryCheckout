@@ -229,7 +229,7 @@ def test_manual_return_from_patron_active_items(client, patron):
     assert "6666666666" in barcodes
 
 
-def test_books_page_returns_200(client):
-    """The /books page route responds successfully."""
-    r = client.get("/books")
+def test_catalog_page_returns_200(client):
+    """The /catalog page route responds successfully."""
+    r = client.get("/catalog")
     assert r.status_code == 200

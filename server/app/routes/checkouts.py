@@ -62,6 +62,9 @@ def return_item():
 
     Request body (JSON):
         barcode (str): Item barcode.
+        card_number (str, optional): When multiple copies of the same book are
+            on loan, this targets that specific patron's copy.  Otherwise the
+            oldest active loan for the barcode is returned.
 
     Returns:
         200 with the returned Loan record as JSON on success.
@@ -69,7 +72,11 @@ def return_item():
     """
     data = request.get_json() or {}
     try:
-        return jsonify(checkout_service.return_item(data.get("barcode", "")).to_dict())
+        loan = checkout_service.return_item(
+            data.get("barcode", ""),
+            card=data.get("card_number") or None,
+        )
+        return jsonify(loan.to_dict())
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400
 
@@ -81,6 +88,8 @@ def renew_item():
     Request body (JSON):
         barcode (str): Item barcode.
         loan_days (int, optional): Number of days to extend from today.  Defaults to 14.
+        card_number (str, optional): When multiple copies are on loan, targets
+            that specific patron's copy.
 
     Returns:
         200 with the updated Loan record as JSON on success.
@@ -92,7 +101,11 @@ def renew_item():
     except (ValueError, TypeError):
         return jsonify({"error": "loan_days must be an integer"}), 400
     try:
-        loan = checkout_service.renew_item(data.get("barcode", ""), loan_days)
+        loan = checkout_service.renew_item(
+            data.get("barcode", ""),
+            loan_days,
+            card=data.get("card_number") or None,
+        )
         return jsonify(loan.to_dict())
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400

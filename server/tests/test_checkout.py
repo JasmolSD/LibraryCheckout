@@ -24,9 +24,10 @@ def test_checkout_explicit_loan_days(app, patron):
     assert loan.loan_days == 7
 
 
-def test_checkout_dedupes_active(app, patron):
+def test_checkout_single_copy_blocks_second(app, patron):
+    """A single-copy book cannot be checked out twice at once (no inventory)."""
     checkout_service.checkout_item(card="1234567890", barcode="9999999999")
-    with pytest.raises(ValidationError, match="already checked out"):
+    with pytest.raises(ValidationError, match="No copies"):
         checkout_service.checkout_item(card="1234567890", barcode="9999999999")
 
 
