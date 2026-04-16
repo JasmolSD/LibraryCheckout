@@ -88,7 +88,7 @@ def main() -> int:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from server.app import create_app  # noqa: E402
     from server.app.database import db  # noqa: E402
-    from server.app.models import Book, Loan, Patron, Transaction  # noqa: E402
+    from server.app.models import CatalogItem, Loan, Patron, Transaction  # noqa: E402
 
     app = create_app("production")
 
@@ -101,7 +101,7 @@ def main() -> int:
 
     # Pre-flight: refuse to run if the destination already has data.
     with Session(dst_engine) as dst:
-        for model in (Patron, Book, Loan, Transaction):
+        for model in (Patron, CatalogItem, Loan, Transaction):
             count = dst.scalar(select(func.count()).select_from(model))
             if count and count > 0:
                 _log(
@@ -110,9 +110,9 @@ def main() -> int:
                 )
                 return 1
 
-    # Bulk-copy in FK-safe order: Patron, Book, Loan, Transaction.
-    # Loan depends on Patron + Book, Transaction depends on Loan.
-    model_order = (Patron, Book, Loan, Transaction)
+    # Bulk-copy in FK-safe order: Patron, CatalogItem, Loan, Transaction.
+    # Loan depends on Patron + CatalogItem, Transaction depends on Loan.
+    model_order = (Patron, CatalogItem, Loan, Transaction)
     totals: dict[str, int] = {}
 
     with Session(src_engine) as src, Session(dst_engine) as dst:

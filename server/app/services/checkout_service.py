@@ -8,7 +8,7 @@ from flask import current_app
 from sqlalchemy import func
 
 from ..database import db
-from ..models import Book, Loan, Patron, Transaction
+from ..models import CatalogItem, Loan, Patron, Transaction
 from .email_service import send_notification_email, send_patron_action_email
 from .receipt_service import (
     ActionKind,
@@ -280,7 +280,7 @@ def add_book_to_catalog(
     author: str | None = None,
     category: str = "book",
     quantity: int = 1,
-) -> Book:
+) -> CatalogItem:
     """Add a new item to the catalog without checking it out.
 
     Args:
@@ -289,9 +289,9 @@ def add_book_to_catalog(
     barcode = validate_barcode(barcode)
     if quantity < 1:
         raise ValidationError("Quantity must be at least 1")
-    if Book.query.filter_by(barcode=barcode).first():
+    if CatalogItem.query.filter_by(barcode=barcode).first():
         raise ValidationError(f"Item {barcode} is already in the catalog")
-    book = Book(
+    book = CatalogItem(
         barcode=barcode,
         title=title.strip() if title and title.strip() else None,
         author=author.strip() if author and author.strip() else None,
@@ -304,7 +304,7 @@ def add_book_to_catalog(
     return book
 
 
-def update_book_quantity(barcode: str, total_copies: int) -> Book:
+def update_book_quantity(barcode: str, total_copies: int) -> CatalogItem:
     """Set the total number of physical copies for an existing book.
 
     Raises:
@@ -314,7 +314,7 @@ def update_book_quantity(barcode: str, total_copies: int) -> Book:
     barcode = validate_barcode(barcode)
     if total_copies < 0:
         raise ValidationError("Quantity cannot be negative")
-    book = Book.query.filter_by(barcode=barcode).first()
+    book = CatalogItem.query.filter_by(barcode=barcode).first()
     if not book:
         raise ValidationError(f"Unknown item {barcode}")
     out = book.checked_out_count
@@ -337,7 +337,7 @@ def overdue_items() -> list[dict]:
             Loan.due_date < now,
         )
         .join(Patron, Loan.patron_id == Patron.id)
-        .join(Book, Loan.book_id == Book.id)
+        .join(CatalogItem, Loan.catalog_id == CatalogItem.id)
         .order_by(Loan.due_date.asc())
         .all()
     )
@@ -349,9 +349,9 @@ def overdue_items() -> list[dict]:
                 "patron_name": loan.patron.name,
                 "card_number": loan.patron.card_number,
                 "card_masked": loan.patron.masked_card,
-                "book_title": loan.book.title or "(untitled)",
-                "barcode": loan.book.barcode,
-                "category": loan.book.category,
+                "item_title": loan.item.title or "(untitled)",
+                "barcode": loan.item.barcode,
+                "category": loan.item.category,
                 "checked_out_at": loan.checked_out_at.isoformat(),
                 "due_date": loan.due_date.isoformat(),
                 "days_overdue": days,
@@ -360,7 +360,7 @@ def overdue_items() -> list[dict]:
     return result
 
 
-def search_books(query: str, limit: int = 20) -> list[Book]:
+def search_books(query: str, limit: int = 20) -> list[CatalogItem]:
     """Search the catalog by barcode prefix, title, or author.
 
     Wildcard behaviour: if ``query`` ends with ``*`` the remainder is
@@ -384,10 +384,14 @@ def search_books(query: str, limit: int = 20) -> list[Book]:
         prefix = q.rstrip("*")
         if not prefix:
             # Bare "*" returns everything, bounded by limit
-            return Book.query.order_by(Book.is_active.desc(), Book.title.asc()).limit(limit).all()
+            return (
+                CatalogItem.query.order_by(CatalogItem.is_active.desc(), CatalogItem.title.asc())
+                .limit(limit)
+                .all()
+            )
         return (
-            Book.query.filter(Book.barcode.startswith(prefix))
-            .order_by(Book.is_active.desc(), Book.barcode.asc())
+            CatalogItem.query.filter(CatalogItem.barcode.startswith(prefix))
+            .order_by(CatalogItem.is_active.desc(), CatalogItem.barcode.asc())
             .limit(limit)
             .all()
         )
@@ -397,14 +401,14 @@ def search_books(query: str, limit: int = 20) -> list[Book]:
     # insensitive for ASCII) and PostgreSQL (where LIKE is case-sensitive).
     q_lower = q.lower()
     return (
-        Book.query.filter(
+        CatalogItem.query.filter(
             db.or_(
-                Book.barcode.startswith(q),
-                func.lower(Book.title).contains(q_lower),
-                func.lower(Book.author).contains(q_lower),
+                CatalogItem.barcode.startswith(q),
+                func.lower(CatalogItem.title).contains(q_lower),
+                func.lower(CatalogItem.author).contains(q_lower),
             )
         )
-        .order_by(Book.is_active.desc(), Book.title.asc())
+        .order_by(CatalogItem.is_active.desc(), CatalogItem.title.asc())
         .limit(limit)
         .all()
     )
@@ -418,12 +422,12 @@ def book_details(barcode: str) -> dict:
     ``copies`` list of the individual loan records (earliest first).
     """
     barcode = validate_barcode(barcode)
-    book = Book.query.filter_by(barcode=barcode).first()
+    book = CatalogItem.query.filter_by(barcode=barcode).first()
     if not book:
         raise ValidationError(f"Unknown item {barcode}")
 
     loans = (
-        Loan.query.filter_by(book_id=book.id, returned_at=None)
+        Loan.query.filter_by(catalog_id=book.id, returned_at=None)
         .order_by(Loan.checked_out_at.asc())
         .all()
     )
@@ -455,14 +459,16 @@ def book_details(barcode: str) -> dict:
     return result
 
 
-def get_or_create_book(barcode: str, title: str | None = None, category: str = "book") -> Book:
+def get_or_create_book(
+    barcode: str, title: str | None = None, category: str = "book"
+) -> CatalogItem:
     """Look up an item by barcode, creating a new record if not found."""
-    book = Book.query.filter_by(barcode=barcode).first()
+    book = CatalogItem.query.filter_by(barcode=barcode).first()
     if book:
         if title and not book.title:
             book.title = title
         return book
-    book = Book(barcode=barcode, title=title, category=category, total_copies=1)
+    book = CatalogItem(barcode=barcode, title=title, category=category, total_copies=1)
     db.session.add(book)
     db.session.flush()
     return book
@@ -500,7 +506,7 @@ def checkout_item(
     due = now + timedelta(days=loan_days)
     loan = Loan(
         patron_id=patron.id,
-        book_id=book.id,
+        catalog_id=book.id,
         loan_days=loan_days,
         checked_out_at=now,
         due_date=due,
@@ -554,11 +560,11 @@ def return_item(barcode: str, card: str | None = None) -> Loan:
     oldest active loan for the barcode is returned.
     """
     barcode = validate_barcode(barcode)
-    book = Book.query.filter_by(barcode=barcode).first()
+    book = CatalogItem.query.filter_by(barcode=barcode).first()
     if not book:
         raise ValidationError(f"Unknown item {barcode}")
 
-    query = Loan.query.filter_by(book_id=book.id, returned_at=None)
+    query = Loan.query.filter_by(catalog_id=book.id, returned_at=None)
     if card:
         patron = Patron.query.filter_by(card_number=validate_card(card)).first()
         if not patron:
@@ -590,10 +596,10 @@ def renew_item(barcode: str, loan_days: int = 14, card: str | None = None) -> Lo
     patron's copy; otherwise the oldest active loan for the barcode is renewed.
     """
     barcode = validate_barcode(barcode)
-    book = Book.query.filter_by(barcode=barcode).first()
+    book = CatalogItem.query.filter_by(barcode=barcode).first()
     if not book:
         raise ValidationError(f"Unknown item {barcode}")
-    query = Loan.query.filter_by(book_id=book.id, returned_at=None)
+    query = Loan.query.filter_by(catalog_id=book.id, returned_at=None)
     if card:
         patron = Patron.query.filter_by(card_number=validate_card(card)).first()
         if not patron:
@@ -642,11 +648,13 @@ def library_stats(*, force: bool = False) -> dict:
 
     total_patrons = Patron.query.count()
     # Count of unique book rows (distinct titles / barcodes, incl. archived)
-    total_books = Book.query.count()
+    total_books = CatalogItem.query.count()
     # Count of unique book rows that are currently active (not archived)
-    active_titles = Book.query.filter(Book.is_active.is_(True)).count()
+    active_titles = CatalogItem.query.filter(CatalogItem.is_active.is_(True)).count()
     # Sum of physical copies across the whole catalog
-    total_copies = db.session.query(func.coalesce(func.sum(Book.total_copies), 0)).scalar() or 0
+    total_copies = (
+        db.session.query(func.coalesce(func.sum(CatalogItem.total_copies), 0)).scalar() or 0
+    )
 
     active_checkouts = Loan.query.filter(Loan.returned_at.is_(None)).count()
 
@@ -668,18 +676,18 @@ def library_stats(*, force: bool = False) -> dict:
     ).count()
 
     by_category = (
-        db.session.query(Book.category, func.count(Loan.id))
-        .join(Loan, Loan.book_id == Book.id)
+        db.session.query(CatalogItem.category, func.count(Loan.id))
+        .join(Loan, Loan.catalog_id == CatalogItem.id)
         .filter(Loan.returned_at.is_(None))
-        .group_by(Book.category)
+        .group_by(CatalogItem.category)
         .order_by(func.count(Loan.id).desc())
         .all()
     )
 
     top_books = (
-        db.session.query(Book.title, Book.barcode, func.count(Loan.id).label("cnt"))
-        .join(Loan, Loan.book_id == Book.id)
-        .group_by(Book.id)
+        db.session.query(CatalogItem.title, CatalogItem.barcode, func.count(Loan.id).label("cnt"))
+        .join(Loan, Loan.catalog_id == CatalogItem.id)
+        .group_by(CatalogItem.id)
         .order_by(func.count(Loan.id).desc())
         .limit(5)
         .all()
@@ -817,44 +825,44 @@ def reactivate_patron(card: str) -> Patron:
     return patron
 
 
-def archive_book(barcode: str) -> Book:
+def archive_book(barcode: str) -> CatalogItem:
     """Archive a book from the catalog (soft-delete).
 
     The book must not be currently checked out. Sets ``is_active = False``
     and logs an ``archive_book`` transaction.
     """
     barcode = validate_barcode(barcode)
-    book = Book.query.filter_by(barcode=barcode).first()
+    book = CatalogItem.query.filter_by(barcode=barcode).first()
     if not book:
         raise ValidationError(f"Unknown item {barcode}")
     if not book.is_active:
         raise ValidationError(f"Item {barcode} is already archived")
 
-    active_loan = Loan.query.filter_by(book_id=book.id, returned_at=None).first()
+    active_loan = Loan.query.filter_by(catalog_id=book.id, returned_at=None).first()
     if active_loan:
         raise ValidationError(
             f"Cannot archive — item {barcode} is currently checked out. Return it first."
         )
 
     book.is_active = False
-    txn = Transaction(book_id=book.id, action="archive_book", created_at=_utcnow())
+    txn = Transaction(catalog_id=book.id, action="archive_book", created_at=_utcnow())
     db.session.add(txn)
     db.session.commit()
     current_app.logger.info("Archived book %s", barcode)
     return book
 
 
-def reactivate_book(barcode: str) -> Book:
+def reactivate_book(barcode: str) -> CatalogItem:
     """Reactivate a previously archived book."""
     barcode = validate_barcode(barcode)
-    book = Book.query.filter_by(barcode=barcode).first()
+    book = CatalogItem.query.filter_by(barcode=barcode).first()
     if not book:
         raise ValidationError(f"Unknown item {barcode}")
     if book.is_active:
         raise ValidationError(f"Item {barcode} is already active")
 
     book.is_active = True
-    txn = Transaction(book_id=book.id, action="reactivate_book", created_at=_utcnow())
+    txn = Transaction(catalog_id=book.id, action="reactivate_book", created_at=_utcnow())
     db.session.add(txn)
     db.session.commit()
     current_app.logger.info("Reactivated book %s", barcode)

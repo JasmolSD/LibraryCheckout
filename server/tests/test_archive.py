@@ -85,7 +85,7 @@ class TestArchiveBook:
         checkout_service.archive_book("9999999999")
         txn = Transaction.query.filter_by(action="archive_book").first()
         assert txn is not None
-        assert txn.book_id == book.id
+        assert txn.catalog_id == book.id
         assert txn.loan_id is None
 
     def test_archive_checked_out_book_fails(self, app, patron):
@@ -129,7 +129,7 @@ class TestReactivateBook:
         checkout_service.reactivate_book("9999999999")
         txn = Transaction.query.filter_by(action="reactivate_book").first()
         assert txn is not None
-        assert txn.book_id == book.id
+        assert txn.catalog_id == book.id
 
     def test_reactivate_already_active_fails(self, app, patron):
         checkout_service.add_book_to_catalog(barcode="9999999999")

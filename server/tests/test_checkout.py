@@ -98,4 +98,4 @@ def test_renew_bad_loan_days_returns_400(client, patron):
 
 def test_categories_persisted(app, patron):
     loan = checkout_service.checkout_item(card="1234567890", barcode="3333333333", category="dvd")
-    assert loan.book.category == "dvd"
+    assert loan.item.category == "dvd"

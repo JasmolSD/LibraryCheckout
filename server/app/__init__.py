@@ -202,6 +202,42 @@ def create_app(config_name: str | None = None) -> Flask:
         force = request.args.get("refresh") == "1"
         return jsonify(check_for_update(force=force))
 
+    # ── Startup connectivity guard ──────────────────────────────────
+    # If DATABASE_URL points at a remote host (Supabase, etc.), verify
+    # the connection is reachable NOW so the librarian sees a clear
+    # message instead of a cryptic Python traceback.
+    with app.app_context():
+        from sqlalchemy import text as sa_text
+
+        try:
+            db.session.execute(sa_text("SELECT 1"))
+        except Exception as exc:
+            db_url = app.config["SQLALCHEMY_DATABASE_URI"]
+            is_remote = "postgresql" in (db_url or "")
+            if is_remote:
+                app.logger.error(
+                    "Cannot connect to the database. "
+                    "Check your Wi-Fi connection and DATABASE_URL in .env.  "
+                    "Error: %s",
+                    exc,
+                )
+                raise SystemExit(
+                    "\n"
+                    "═══════════════════════════════════════════════════════\n"
+                    "  CANNOT CONNECT TO THE DATABASE\n"
+                    "\n"
+                    "  This app requires a Wi-Fi / internet connection\n"
+                    "  to reach the Supabase database.\n"
+                    "\n"
+                    "  Please check:\n"
+                    "    1. Wi-Fi is connected and has internet access\n"
+                    "    2. DATABASE_URL in your .env file is correct\n"
+                    "\n"
+                    f"  Technical details: {exc}\n"
+                    "═══════════════════════════════════════════════════════\n"
+                ) from exc
+            raise  # Local SQLite — let the original error propagate
+
     # Create tables on first run, then apply any additive column migrations
     # so end users upgrading an older library.db don't hit "no such column".
     with app.app_context():
@@ -212,5 +248,33 @@ def create_app(config_name: str | None = None) -> Flask:
         if added:
             app.logger.info("Schema migration: added columns %s", ", ".join(added))
         app.logger.info("Application initialized (env=%s)", app.config["ENV"])
+
+    # ── Request-time connectivity guard ──────────────────────────────
+    # If the Wi-Fi drops while the app is running, catch DB errors on
+    # each request and show a friendly message instead of a 500 trace.
+    @app.errorhandler(Exception)
+    def _handle_db_error(exc):
+        from sqlalchemy.exc import OperationalError
+
+        if isinstance(exc, OperationalError):
+            db_url = app.config.get("SQLALCHEMY_DATABASE_URI") or ""
+            if "postgresql" in db_url:
+                app.logger.error("Database connection lost: %s", exc)
+                try:
+                    from flask import render_template
+
+                    return (
+                        render_template("offline.html"),
+                        503,
+                    )
+                except Exception:
+                    return (
+                        "<h1>No Database Connection</h1>"
+                        "<p>This app requires Wi-Fi to reach the library database.</p>"
+                        "<p>Please check your internet connection and refresh this page.</p>",
+                        503,
+                    )
+        # Re-raise anything that isn't a DB connectivity error
+        raise exc
 
     return app

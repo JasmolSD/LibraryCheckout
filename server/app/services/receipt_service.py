@@ -68,11 +68,11 @@ def build_patron_action_email(
     """
     library_name = current_app.config.get("LIBRARY_NAME", "Library")
     greeting = _greeting_first_name(patron)
-    book = loan.book
-    title_display = f'"{book.title}"' if book and book.title else f"barcode {book.barcode}"
-    author_line = f"  Author:      {book.author}\n" if book and book.author else ""
-    barcode_line = f"  Barcode:     {book.barcode}\n" if book else ""
-    category_line = f"  Category:    {book.category}\n" if book else ""
+    item = loan.item
+    title_display = f'"{item.title}"' if item and item.title else f"barcode {item.barcode}"
+    author_line = f"  Author:      {item.author}\n" if item and item.author else ""
+    barcode_line = f"  Barcode:     {item.barcode}\n" if item else ""
+    category_line = f"  Category:    {item.category}\n" if item else ""
 
     count = len(active_items)
     if count == 0:
@@ -220,8 +220,8 @@ def build_receipt_pdf(patron: Patron, items: list[Loan]) -> bytes:
         if y < 80:
             c.showPage()
             y = height - 60
-        c.drawString(60, y, loan.book.barcode)
-        c.drawString(260, y, (loan.book.title or "—")[:25])
+        c.drawString(60, y, loan.item.barcode)
+        c.drawString(260, y, (loan.item.title or "—")[:25])
         c.drawString(420, y, loan.due_date.strftime("%m/%d/%y") if loan.due_date else "—")
         y -= 14
 

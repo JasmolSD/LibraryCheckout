@@ -1,4 +1,4 @@
-"""SQLAlchemy models — Patron, Book, Loan, Transaction."""
+"""SQLAlchemy models — Patron, CatalogItem, Loan, Transaction."""
 
 from __future__ import annotations
 
@@ -66,8 +66,8 @@ class Patron(_Base):
         }
 
 
-class Book(_Base):
-    __tablename__ = "books"
+class CatalogItem(_Base):
+    __tablename__ = "catalog"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     barcode: Mapped[str] = mapped_column(String(14), unique=True, index=True)
@@ -79,7 +79,7 @@ class Book(_Base):
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
     is_active: Mapped[bool] = mapped_column(default=True)
 
-    loans: Mapped[list[Loan]] = relationship(back_populates="book")
+    loans: Mapped[list[Loan]] = relationship(back_populates="item")
 
     @property
     def checked_out_count(self) -> int:
@@ -113,14 +113,14 @@ class Loan(_Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     patron_id: Mapped[int] = mapped_column(ForeignKey("patrons.id"), index=True)
-    book_id: Mapped[int] = mapped_column(ForeignKey("books.id"), index=True)
+    catalog_id: Mapped[int] = mapped_column(ForeignKey("catalog.id"), index=True)
     loan_days: Mapped[int] = mapped_column(default=14)
     checked_out_at: Mapped[datetime] = mapped_column(default=_utcnow)
     due_date: Mapped[datetime | None] = mapped_column()
     returned_at: Mapped[datetime | None] = mapped_column()
 
     patron: Mapped[Patron] = relationship(back_populates="loans")
-    book: Mapped[Book] = relationship(back_populates="loans")
+    item: Mapped[CatalogItem] = relationship(back_populates="loans")
     transactions: Mapped[list[Transaction]] = relationship(
         back_populates="loan", cascade="all, delete-orphan"
     )
@@ -137,10 +137,10 @@ class Loan(_Base):
         return {
             "id": self.id,
             "patron_id": self.patron_id,
-            "book_id": self.book_id,
-            "barcode": self.book.barcode if self.book else None,
-            "title": self.book.title if self.book else None,
-            "category": self.book.category if self.book else None,
+            "catalog_id": self.catalog_id,
+            "barcode": self.item.barcode if self.item else None,
+            "title": self.item.title if self.item else None,
+            "category": self.item.category if self.item else None,
             "loan_days": self.loan_days,
             "checked_out_at": self.checked_out_at.isoformat(),
             "due_date": self.due_date.isoformat() if self.due_date else None,
@@ -155,7 +155,7 @@ class Transaction(_Base):
 
     Loan-level actions (checkout, return, renew) set ``loan_id``.
     Entity-level actions (archive_patron, reactivate_patron,
-    archive_book, reactivate_book) set ``patron_id`` or ``book_id``.
+    archive_book, reactivate_book) set ``patron_id`` or ``catalog_id``.
     """
 
     __tablename__ = "transactions"
@@ -163,7 +163,7 @@ class Transaction(_Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     loan_id: Mapped[int | None] = mapped_column(ForeignKey("loans.id"), index=True)
     patron_id: Mapped[int | None] = mapped_column(ForeignKey("patrons.id"), index=True)
-    book_id: Mapped[int | None] = mapped_column(ForeignKey("books.id"), index=True)
+    catalog_id: Mapped[int | None] = mapped_column(ForeignKey("catalog.id"), index=True)
     action: Mapped[str] = mapped_column(String(30))
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
 
@@ -179,9 +179,9 @@ class Transaction(_Base):
         if self.loan:
             result.update(
                 {
-                    "barcode": self.loan.book.barcode if self.loan.book else None,
-                    "title": self.loan.book.title if self.loan.book else None,
-                    "category": self.loan.book.category if self.loan.book else None,
+                    "barcode": self.loan.item.barcode if self.loan.item else None,
+                    "title": self.loan.item.title if self.loan.item else None,
+                    "category": self.loan.item.category if self.loan.item else None,
                     "checked_out_at": self.loan.checked_out_at.isoformat(),
                     "due_date": (self.loan.due_date.isoformat() if self.loan.due_date else None),
                     "returned_at": (
