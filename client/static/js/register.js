@@ -67,12 +67,19 @@ function registerApp() {
                 this.patronForm.card_number = card;
                 this.cardPreFilled = true;
             } else {
-                try {
-                    const r = await fetch('/api/patrons/next-card');
-                    const data = await r.json();
-                    this.patronForm.card_number = data.card_number ?? '';
-                } catch {
-                    this.patronError = 'Could not generate a card number. Please refresh.';
+                // Retry up to 3 times — Supabase free tier may take a few
+                // seconds to wake from a cold start on the very first request.
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        const r = await fetch('/api/patrons/next-card');
+                        if (r.ok) {
+                            const data = await r.json();
+                            this.patronForm.card_number = data.card_number ?? '';
+                            break;
+                        }
+                    } catch { /* retry */ }
+                    if (attempt < 2) await new Promise(ok => setTimeout(ok, 2000));
+                    else this.patronError = 'Could not generate a card number. Check your internet connection and refresh.';
                 }
             }
             this.$nextTick(() => {
