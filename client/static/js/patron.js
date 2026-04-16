@@ -47,6 +47,22 @@ function historyApp() {
         cardInvalid: false,
         _cardInvalidTimer: null,
 
+        // ── Edit-patron state ────────────────────────────────────
+        editing:    false,
+        editSaving: false,
+        editError:  '',
+        editForm: {
+            first_name:  '',
+            last_name:   '',
+            middle_name: '',
+            birth_date:  '',
+            email:       '',
+            phone:       '',
+        },
+
+        // ── Archive-patron state ────────────────────────────────
+        archiveActing: false,
+
         // ── Lifecycle ────────────────────────────────────────────
 
         /**
@@ -158,6 +174,120 @@ function historyApp() {
             this.nameResults = [];
             this.nameSearched = false;
             this.load();
+        },
+
+        // ── Edit patron ───────────────────────────────────────────
+
+        /** Pre-fill the edit form from the loaded patron and show the panel. */
+        openEdit() {
+            if (!this.data) return;
+            const p = this.data.patron;
+            this.editForm = {
+                first_name:  p.first_name  || '',
+                last_name:   p.last_name   || '',
+                middle_name: p.middle_name || '',
+                birth_date:  p.birth_date  || '',
+                email:       p.email       || '',
+                phone:       p.phone       || '',
+            };
+            this.editError = '';
+            this.editing   = true;
+        },
+
+        cancelEdit() {
+            this.editing   = false;
+            this.editError = '';
+        },
+
+        async saveEdit() {
+            if (!this.data) return;
+            this.editSaving = true;
+            this.editError  = '';
+            try {
+                const r = await fetch(`/api/patrons/${encodeURIComponent(this.data.patron.card_number)}`, {
+                    method:  'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({
+                        first_name:  this.editForm.first_name,
+                        last_name:   this.editForm.last_name,
+                        middle_name: this.editForm.middle_name,
+                        birth_date:  this.editForm.birth_date || null,
+                        email:       this.editForm.email,
+                        phone:       this.editForm.phone,
+                    }),
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    this.editError = data.error || 'Save failed';
+                    return;
+                }
+                this.editing = false;
+                // Refresh the patron summary so the header shows the new values
+                await this.load();
+            } catch (e) {
+                this.editError = e.message;
+            } finally {
+                this.editSaving = false;
+            }
+        },
+
+        /**
+         * Soft-delete the patron account — requires zero active loans.
+         * Prompts for confirmation first so it's not a single-click disaster.
+         */
+        async archivePatron() {
+            if (!this.data) return;
+            if (this.data.currently_out > 0) {
+                this.editError = 'Return all items before archiving this patron.';
+                return;
+            }
+            if (!confirm(
+                `Archive ${this.data.patron.name}?\n\n` +
+                `The account will be hidden from checkout but all history ` +
+                `and loan records are preserved. You can reactivate it later.`
+            )) return;
+
+            this.archiveActing = true;
+            this.editError     = '';
+            try {
+                const r = await fetch(
+                    `/api/patrons/${encodeURIComponent(this.data.patron.card_number)}/archive`,
+                    { method: 'POST' },
+                );
+                const data = await r.json();
+                if (!r.ok) {
+                    this.editError = data.error || 'Archive failed';
+                    return;
+                }
+                await this.load();
+            } catch (e) {
+                this.editError = e.message;
+            } finally {
+                this.archiveActing = false;
+            }
+        },
+
+        /** Undo an archive — brings the patron back into circulation. */
+        async reactivatePatron() {
+            if (!this.data) return;
+            this.archiveActing = true;
+            this.editError     = '';
+            try {
+                const r = await fetch(
+                    `/api/patrons/${encodeURIComponent(this.data.patron.card_number)}/reactivate`,
+                    { method: 'POST' },
+                );
+                const data = await r.json();
+                if (!r.ok) {
+                    this.editError = data.error || 'Reactivate failed';
+                    return;
+                }
+                await this.load();
+            } catch (e) {
+                this.editError = e.message;
+            } finally {
+                this.archiveActing = false;
+            }
         },
 
         // ── Return items ──────────────────────────────────────────

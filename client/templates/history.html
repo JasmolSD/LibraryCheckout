@@ -126,30 +126,148 @@
                         <div>
                             <h3 class="text-xl font-bold text-slate-900" x-text="data.patron.name"></h3>
                             <p class="text-sm text-slate-400 font-mono" x-text="data.patron.card_masked"></p>
+                            <div class="flex flex-wrap gap-3 mt-0.5 text-xs text-slate-500">
+                                <span x-show="data.patron.email" x-text="data.patron.email"></span>
+                                <span x-show="data.patron.phone" x-text="data.patron.phone"></span>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Stat pills -->
-                    <div class="flex gap-6 text-center">
+                    <div class="flex items-center gap-4">
+                        <!-- Stat pills -->
+                        <div class="flex gap-6 text-center">
+                            <div>
+                                <div class="text-2xl font-bold text-slate-900" x-text="data.total_checkouts"></div>
+                                <div class="text-xs text-slate-500">Total</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-emerald-600" x-text="data.currently_out"></div>
+                                <div class="text-xs text-slate-500">Out</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold"
+                                     :class="data.late_count > 0 ? 'text-rose-600' : 'text-slate-900'"
+                                     x-text="data.late_count"></div>
+                                <div class="text-xs text-slate-500">Late</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-slate-900" x-text="data.account_age_days"></div>
+                                <div class="text-xs text-slate-500">Days</div>
+                            </div>
+                        </div>
+
+                        <button @click="openEdit()"
+                                class="bg-slate-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg
+                                       hover:bg-slate-800 transition-colors flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                      d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5
+                                         4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/>
+                            </svg>
+                            Edit
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Edit patron panel -->
+                <div x-show="editing"
+                     x-transition
+                     class="mt-5 pt-5 border-t border-slate-200">
+                    <h4 class="text-sm font-semibold text-slate-800 mb-3">Edit Patron Information</h4>
+                    <div x-show="editError"
+                         class="mb-3 p-2 bg-rose-50 border border-rose-200 rounded text-xs text-rose-700"
+                         x-text="editError">
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                         <div>
-                            <div class="text-2xl font-bold text-slate-900" x-text="data.total_checkouts"></div>
-                            <div class="text-xs text-slate-500">Total</div>
+                            <label class="block text-xs text-slate-600 mb-1">Last Name *</label>
+                            <input x-model="editForm.last_name"
+                                   type="text"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm
+                                          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                         </div>
                         <div>
-                            <div class="text-2xl font-bold text-emerald-600" x-text="data.currently_out"></div>
-                            <div class="text-xs text-slate-500">Out</div>
+                            <label class="block text-xs text-slate-600 mb-1">First Name *</label>
+                            <input x-model="editForm.first_name"
+                                   type="text"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm
+                                          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                         </div>
                         <div>
-                            <div class="text-2xl font-bold"
-                                 :class="data.late_count > 0 ? 'text-rose-600' : 'text-slate-900'"
-                                 x-text="data.late_count"></div>
-                            <div class="text-xs text-slate-500">Late</div>
+                            <label class="block text-xs text-slate-600 mb-1">Middle Name</label>
+                            <input x-model="editForm.middle_name"
+                                   type="text"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm
+                                          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                         </div>
                         <div>
-                            <div class="text-2xl font-bold text-slate-900" x-text="data.account_age_days"></div>
-                            <div class="text-xs text-slate-500">Days</div>
+                            <label class="block text-xs text-slate-600 mb-1">Date of Birth</label>
+                            <input x-model="editForm.birth_date"
+                                   type="date"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm
+                                          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-600 mb-1">Email</label>
+                            <input x-model="editForm.email"
+                                   type="email"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm
+                                          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-600 mb-1">Phone</label>
+                            <input x-model="editForm.phone"
+                                   type="tel"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm
+                                          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                         </div>
                     </div>
+                    <div class="flex flex-wrap items-center gap-2 mt-4">
+                        <button @click="cancelEdit()"
+                                class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs
+                                       font-medium hover:bg-slate-50 transition-colors">
+                            Cancel
+                        </button>
+                        <button @click="saveEdit()"
+                                :disabled="editSaving"
+                                class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-medium
+                                       hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-1.5">
+                            <span x-show="editSaving" class="spinner"></span>
+                            <span x-text="editSaving ? 'Saving…' : 'Save Changes'"></span>
+                        </button>
+
+                        <!-- Archive / Reactivate — pushed to the right side of the row -->
+                        <div class="ml-auto flex items-center gap-2">
+                            <template x-if="data && data.patron.is_active">
+                                <button @click="archivePatron()"
+                                        :disabled="archiveActing || data.currently_out > 0"
+                                        :title="data.currently_out > 0
+                                            ? 'Return all items before archiving'
+                                            : 'Archive this patron account'"
+                                        class="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-medium
+                                               hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed
+                                               transition-colors flex items-center gap-1.5">
+                                    <span x-show="archiveActing" class="spinner"></span>
+                                    <span>Archive Patron</span>
+                                </button>
+                            </template>
+                            <template x-if="data && !data.patron.is_active">
+                                <button @click="reactivatePatron()"
+                                        :disabled="archiveActing"
+                                        class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium
+                                               hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed
+                                               transition-colors flex items-center gap-1.5">
+                                    <span x-show="archiveActing" class="spinner"></span>
+                                    <span>Reactivate</span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    <p x-show="data && !data.patron.is_active"
+                       class="mt-2 text-xs text-slate-500">
+                        This patron account is <strong class="text-slate-700">archived</strong>.
+                        New checkouts are blocked until reactivated.
+                    </p>
                 </div>
             </div>
 

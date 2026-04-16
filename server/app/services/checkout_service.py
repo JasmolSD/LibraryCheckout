@@ -9,6 +9,14 @@ from sqlalchemy import func
 
 from ..database import db
 from ..models import Book, Loan, Patron, Transaction
+from .email_service import send_notification_email, send_patron_action_email
+from .receipt_service import (
+    ActionKind,
+    build_patron_action_email,
+    build_patron_card_pdf,
+    build_patron_welcome_email,
+    build_receipt_pdf,
+)
 from .validators import (
     ValidationError,
     validate_barcode,
@@ -19,6 +27,52 @@ from .validators import (
 def _utcnow() -> datetime:
     """Return current UTC time as a naive datetime (SQLite-compatible)."""
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _fmt_local(dt: datetime | None) -> str:
+    """Render a stored (naive, UTC) datetime as a local-time string.
+
+    Used for the archival notification emails so the library staff see
+    human-readable local timestamps instead of UTC.
+    """
+    if dt is None:
+        return "—"
+    # Stored values are naive UTC. Attach UTC then convert to the
+    # machine's local timezone.
+    local = dt.replace(tzinfo=UTC).astimezone()
+    return local.strftime("%Y-%m-%d %I:%M %p %Z").strip()
+
+
+def _notify_patron_of_action(action: ActionKind, patron: Patron, loan: Loan) -> None:
+    """Fire a confirmation email to the patron about a checkout / renew / return.
+
+    No-op when the patron has no email on file, SMTP isn't set, or the
+    ``NOTIFY_PATRONS`` flag is disabled. Attaches a PDF receipt of the
+    patron's currently-active loans (except on a return that leaves
+    them with no items).
+    """
+    if not patron.email:
+        return
+    # Remaining active loans AFTER the action
+    remaining = [ln for ln in patron.loans if ln.returned_at is None]
+    subject, body = build_patron_action_email(action, patron, loan, remaining)
+
+    pdf_bytes: bytes | None = None
+    pdf_filename: str | None = None
+    if remaining:
+        try:
+            pdf_bytes = build_receipt_pdf(patron, remaining)
+            pdf_filename = f"receipt_{patron.card_number[-4:]}.pdf"
+        except Exception as exc:  # pragma: no cover — ReportLab edge cases
+            current_app.logger.warning("Receipt PDF build failed for email: %s", exc)
+
+    send_patron_action_email(
+        to=patron.email,
+        subject=subject,
+        body=body,
+        pdf_bytes=pdf_bytes,
+        pdf_filename=pdf_filename,
+    )
 
 
 # ── Stats cache ──────────────────────────────────────────────────────────────
@@ -79,6 +133,144 @@ def get_or_create_patron(
     db.session.add(patron)
     db.session.commit()
     current_app.logger.info("Registered new patron %s", patron.masked_card)
+
+    # Archival notification — fire-and-forget, background thread.
+    # Only sent for brand-new registrations, not for get-or-create hits.
+    library_name = current_app.config.get("LIBRARY_NAME", "Library")
+    library_branch = current_app.config.get("LIBRARY_BRANCH", "")
+    signature = f"— {library_name}" + (f" / {library_branch}" if library_branch else "")
+    send_notification_email(
+        subject=f"[Library Patron] New — {patron.name} ({patron.card_number})",
+        body=(
+            f"A new patron was registered.\n\n"
+            f"Card:    {patron.card_number}\n"
+            f"Name:    {patron.name}\n"
+            f"DOB:     {patron.birth_date.isoformat() if patron.birth_date else '—'}\n"
+            f"Email:   {patron.email or '—'}\n"
+            f"Phone:   {patron.phone or '—'}\n\n"
+            f"Registered: {_fmt_local(patron.created_at)}\n\n"
+            f"{signature}\n"
+        ),
+        folder=current_app.config.get("LIBRARY_PATRONS_LABEL", "Library Patrons"),
+    )
+
+    # Welcome email to the new patron — fire-and-forget, background thread.
+    # Skips silently when the patron has no email, SMTP isn't set, or the
+    # NOTIFY_PATRONS flag is off.
+    if patron.email:
+        try:
+            pdf_bytes = build_patron_card_pdf(patron)
+            pdf_filename = f"library_card_{patron.card_number}.pdf"
+        except Exception as exc:  # pragma: no cover — ReportLab edge cases
+            current_app.logger.warning("Patron card PDF build failed for welcome: %s", exc)
+            pdf_bytes = None
+            pdf_filename = None
+        welcome_subject, welcome_body = build_patron_welcome_email(patron)
+        send_patron_action_email(
+            to=patron.email,
+            subject=welcome_subject,
+            body=welcome_body,
+            pdf_bytes=pdf_bytes,
+            pdf_filename=pdf_filename,
+        )
+
+    return patron
+
+
+def update_patron(
+    card: str,
+    *,
+    first_name: str | None = None,
+    last_name: str | None = None,
+    middle_name: str | None = None,
+    birth_date: date | None = None,
+    email: str | None = None,
+    phone: str | None = None,
+) -> Patron:
+    """Edit a patron's profile in place.
+
+    Only non-None arguments are applied. Pass an empty string for
+    ``middle_name`` / ``email`` / ``phone`` to clear those optional
+    fields. Names are uppercased to match the stored format.
+
+    Raises:
+        ValidationError: If the card is invalid, the patron is not
+            found, or first/last name is blanked out (they're required).
+    """
+    card = validate_card(card)
+    patron = Patron.query.filter_by(card_number=card).first()
+    if not patron:
+        raise ValidationError("Patron not found")
+
+    # Snapshot the "before" state so we can compute a diff for the
+    # archival notification email once the update commits.
+    before = {
+        "first_name": patron.first_name,
+        "last_name": patron.last_name,
+        "middle_name": patron.middle_name,
+        "birth_date": patron.birth_date.isoformat() if patron.birth_date else None,
+        "email": patron.email,
+        "phone": patron.phone,
+    }
+
+    if first_name is not None:
+        stripped = first_name.strip()
+        if not stripped:
+            raise ValidationError("First name cannot be empty")
+        patron.first_name = stripped.upper()
+    if last_name is not None:
+        stripped = last_name.strip()
+        if not stripped:
+            raise ValidationError("Last name cannot be empty")
+        patron.last_name = stripped.upper()
+    if middle_name is not None:
+        cleaned = middle_name.strip()
+        patron.middle_name = cleaned.upper() if cleaned else None
+    if birth_date is not None:
+        patron.birth_date = birth_date
+    if email is not None:
+        cleaned = email.strip()
+        patron.email = cleaned or None
+    if phone is not None:
+        cleaned = phone.strip()
+        patron.phone = cleaned or None
+
+    after = {
+        "first_name": patron.first_name,
+        "last_name": patron.last_name,
+        "middle_name": patron.middle_name,
+        "birth_date": patron.birth_date.isoformat() if patron.birth_date else None,
+        "email": patron.email,
+        "phone": patron.phone,
+    }
+    diffs = [(k, before[k], after[k]) for k in before if before[k] != after[k]]
+
+    db.session.commit()
+    current_app.logger.info("Updated patron %s", patron.masked_card)
+
+    # Archival notification — only when something actually changed.
+    if diffs:
+        library_name = current_app.config.get("LIBRARY_NAME", "Library")
+        library_branch = current_app.config.get("LIBRARY_BRANCH", "")
+        signature = f"— {library_name}" + (f" / {library_branch}" if library_branch else "")
+
+        def _fmt(val):
+            return "None" if val is None else f'"{val}"'
+
+        change_lines = "\n".join(f"  {k}: {_fmt(b)} → {_fmt(a)}" for k, b, a in diffs)
+        send_notification_email(
+            subject=f"[Library Patron] Updated — {patron.name} ({patron.card_number})",
+            body=(
+                f"A patron profile was edited.\n\n"
+                f"Card:    {patron.card_number}\n"
+                f"Name:    {patron.name}\n\n"
+                f"Changes:\n{change_lines}\n\n"
+                f"Updated: {_fmt_local(_utcnow())}\n\n"
+                f"{signature}\n"
+            ),
+            folder=current_app.config.get("LIBRARY_PATRONS_LABEL", "Library Patrons"),
+        )
+
     return patron
 
 
@@ -319,6 +511,34 @@ def checkout_item(
     current_app.logger.info(
         "Checkout: patron=%s book=%s loan_days=%d", patron.masked_card, barcode, loan_days
     )
+
+    # Archival notification — fire-and-forget, background thread
+    library_name = current_app.config.get("LIBRARY_NAME", "Library")
+    library_branch = current_app.config.get("LIBRARY_BRANCH", "")
+    signature = f"— {library_name}" + (f" / {library_branch}" if library_branch else "")
+    title_display = f'"{book.title}"' if book.title else f"barcode {book.barcode}"
+    send_notification_email(
+        subject=f"[Library Receipt] {patron.name} — {title_display}",
+        body=(
+            f"A checkout was recorded.\n\n"
+            f"Patron:  {patron.name}\n"
+            f"Card:    {patron.card_number}\n"
+            f"Email:   {patron.email or '—'}\n\n"
+            f"Item:    {title_display}\n"
+            f"Author:  {book.author or '—'}\n"
+            f"Barcode: {book.barcode}\n"
+            f"Category: {book.category}\n\n"
+            f"Loan days: {loan_days}\n"
+            f"Checked out: {_fmt_local(now)}\n"
+            f"Due date:    {_fmt_local(due)}\n\n"
+            f"{signature}\n"
+        ),
+        folder=current_app.config.get("LIBRARY_RECEIPTS_LABEL", "Library Receipts"),
+    )
+
+    # Patron-facing confirmation email (fire-and-forget)
+    _notify_patron_of_action("checkout", patron, loan)
+
     return loan
 
 
@@ -352,6 +572,10 @@ def return_item(barcode: str, card: str | None = None) -> Loan:
     db.session.commit()
 
     current_app.logger.info("Return: book=%s", barcode)
+
+    # Patron-facing confirmation email (fire-and-forget)
+    _notify_patron_of_action("return", active.patron, active)
+
     return active
 
 
@@ -384,6 +608,10 @@ def renew_item(barcode: str, loan_days: int = 14, card: str | None = None) -> Lo
     db.session.commit()
 
     current_app.logger.info("Renew: book=%s loan_days=%d", barcode, loan_days)
+
+    # Patron-facing confirmation email (fire-and-forget)
+    _notify_patron_of_action("renew", active.patron, active)
+
     return active
 
 
@@ -478,15 +706,23 @@ def library_stats(*, force: bool = False) -> dict:
 
 
 def search_patrons(query: str) -> list[Patron]:
-    """Search patrons by first or last name (case-insensitive partial match)."""
-    q = query.strip().upper()
-    if not q:
+    """Search patrons by name or card-number prefix.
+
+    Matches against first name, last name (case-insensitive ``contains``)
+    and card number (``starts with``).  Digit-only queries still work the
+    same way they always have for card lookups, plus now match partial
+    card numbers; text queries match names.
+    """
+    raw = query.strip()
+    if not raw:
         return []
+    q_upper = raw.upper()
     return (
         Patron.query.filter(
             db.or_(
-                Patron.last_name.contains(q),
-                Patron.first_name.contains(q),
+                Patron.last_name.contains(q_upper),
+                Patron.first_name.contains(q_upper),
+                Patron.card_number.startswith(raw),
             )
         )
         .limit(50)

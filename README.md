@@ -5,7 +5,11 @@ Ported from a legacy Excel/VBA workflow to a modern Flask + pywebview stack.
 
 ## Features
 
-- **Library card scanning** — look up patrons instantly; new-patron registration via inline modal (no `prompt()`)
+- **Library card scanning + patron name search** — look up patrons by scanning a card or typing a partial name; autofill dropdown picks the right patron
+- **Patron card printing & email** — the register success panel offers a printable PDF (with a scannable Code-128 barcode of the card number) and an "Email to Patron" button that sends the same PDF via SMTP
+- **Email receipts** — the checkout screen's receipt panel has an "Email Receipt" button alongside Print; the email contains the PDF as an attachment and a text list of the items
+- **Automatic archival to your own inbox** — when SMTP is configured, every checkout and patron edit also mails the library account a plain-text summary; with IMAP set, the notifications are automatically filed under dedicated **Library Receipts** and **Library Patrons** Gmail labels. Toggle with `ARCHIVE_NOTIFICATIONS=true/false` in `.env`
+- **Editable patron profiles** — the History page has an Edit button that lets librarians update name, DOB, email, and phone in place
 - **Auto-generated card numbers** — registration page assigns the next sequential 14-digit library card automatically; no manual entry required
 - **Catalog management** — Catalog page with ISBN auto-fill via Google Books for adding new items and an autofill search box (matches barcode prefix, title, or author) for managing existing ones; supports `barcode*` wildcard for prefix-only lookups
 - **Autofill book selection** — the checkout screen's item field shows a live dropdown of matching catalog entries (barcode · title · author) as you type
@@ -94,9 +98,12 @@ docker run -p 5000:5000 library-checkout
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/patrons/next-card` | Next auto-generated 14-digit card number |
-| `GET` | `/api/patrons/search?q=` | Search patrons by name |
+| `GET` | `/api/patrons/search?q=` | Search patrons by name or card-number prefix |
 | `GET` | `/api/patrons/<card>` | Patron summary + active items + history |
+| `GET` | `/api/patrons/<card>/card-pdf` | Printable patron card PDF with a Code-128 barcode |
 | `POST` | `/api/patrons/` | Register a new patron |
+| `PATCH` | `/api/patrons/<card>` | Update an existing patron's profile |
+| `POST` | `/api/patrons/<card>/card-email` | Email the patron card PDF to the patron |
 | `POST` | `/api/patrons/<card>/archive` | Archive (soft-delete) a patron |
 | `POST` | `/api/patrons/<card>/reactivate` | Reactivate an archived patron |
 
@@ -126,12 +133,75 @@ docker run -p 5000:5000 library-checkout
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/receipts/<card>` | PDF receipt of active checkouts |
+| `POST` | `/api/receipts/<card>/email` | Email the receipt PDF to the patron |
 
 ### Stats
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/stats` | Aggregate library statistics (patrons, catalog, activity, top books) |
+
+## Email configuration (optional)
+
+The patron-card email and receipt-email features both use the `SMTP_*`
+environment variables. Set them in `.env` (or the system environment)
+to enable outgoing mail; leave `SMTP_HOST` empty to disable all email
+features — the UI buttons will then return a 503 with a helpful error.
+
+```bash
+SMTP_HOST=smtp.yourprovider.com
+SMTP_PORT=587                 # default 587
+SMTP_USER=library@example.com
+SMTP_PASSWORD=...
+SMTP_FROM=library@example.com # defaults to SMTP_USER
+SMTP_USE_TLS=true             # default true
+```
+
+No extra dependencies are required — the service uses the Python
+stdlib `smtplib` + `email.message` modules.
+
+### Automatic archival to your own inbox
+
+When SMTP is configured, the app **also mails itself** a summary every
+time an item is checked out, a new patron is registered, or a patron's
+profile is edited. These notifications go from the library account to
+itself — creating a searchable history of library activity inside your
+own Gmail / IMAP inbox.
+
+| Event | Subject prefix | Gmail label |
+|---|---|---|
+| Checkout | `[Library Receipt]` | `Library Receipts` |
+| New patron | `[Library Patron] New` | `Library Patrons` |
+| Patron edited | `[Library Patron] Updated` | `Library Patrons` |
+
+The messages are sent on a daemon thread, so checkout actions don't
+wait for SMTP. If SMTP is slow or offline the user action still
+completes immediately and a warning is logged.
+
+**Kill switch** — set `ARCHIVE_NOTIFICATIONS=false` in `.env` to
+disable the automatic archival without touching the rest of the email
+setup. The user-clicked Email Receipt / Email to Patron buttons keep
+working; only the background self-mails stop.
+
+**Gmail labels** — by default the notifications land in the Inbox /
+Sent Mail folders. To get them automatically filed under dedicated
+**Library Receipts** and **Library Patrons** labels, add IMAP settings
+to `.env`:
+
+```bash
+IMAP_HOST=imap.gmail.com
+IMAP_PORT=993
+# IMAP_USER / IMAP_PASSWORD default to SMTP_USER / SMTP_PASSWORD
+IMAP_USE_SSL=true
+# Rename the labels here if you prefer
+# LIBRARY_RECEIPTS_LABEL=Library Receipts
+# LIBRARY_PATRONS_LABEL=Library Patrons
+```
+
+With IMAP set, the app creates the labels on first use (if missing)
+and appends each notification via IMAP so Gmail files it accordingly.
+Without IMAP, the notifications still go out — you just won't see
+them auto-grouped in a dedicated label.
 
 ## Customising the UI
 

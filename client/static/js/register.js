@@ -32,6 +32,11 @@ function registerApp() {
         patronSubmitting: false,
         patronError:      '',
         cardPreFilled:    false,
+        /** Set after a successful patron registration: { card_number, name, email }. */
+        patronRegistered: null,
+        emailSending:     false,
+        emailStatus:      '',  // '' | 'sent' | 'error'
+        emailMessage:     '',
 
         // ── Book state ──────────────────────────────────────────
         bookForm: {
@@ -118,12 +123,62 @@ function registerApp() {
                     this.patronError = data.error || 'Registration failed. Please check your entries.';
                     return;
                 }
-                window.location.href = `/?card=${encodeURIComponent(data.card_number)}`;
+                // Show the "what next?" panel instead of immediately redirecting,
+                // so the librarian has a chance to print the patron's card.
+                this.patronRegistered = {
+                    card_number: data.card_number,
+                    name:        data.name,
+                    email:       data.email || '',
+                };
+                this.emailStatus  = '';
+                this.emailMessage = '';
             } catch (e) {
                 this.patronError = e.message;
             } finally {
                 this.patronSubmitting = false;
             }
+        },
+
+        /** Open the printable patron card PDF in a new tab. */
+        printPatronCard() {
+            if (!this.patronRegistered) return;
+            window.open(
+                `/api/patrons/${encodeURIComponent(this.patronRegistered.card_number)}/card-pdf`,
+                '_blank',
+            );
+        },
+
+        /** Email the patron card PDF to the patron's address on file. */
+        async emailPatronCard() {
+            if (!this.patronRegistered) return;
+            this.emailSending = true;
+            this.emailStatus  = '';
+            this.emailMessage = '';
+            try {
+                const r = await fetch(
+                    `/api/patrons/${encodeURIComponent(this.patronRegistered.card_number)}/card-email`,
+                    { method: 'POST' },
+                );
+                const data = await r.json();
+                if (!r.ok) {
+                    this.emailStatus  = 'error';
+                    this.emailMessage = data.error || 'Could not send email.';
+                    return;
+                }
+                this.emailStatus  = 'sent';
+                this.emailMessage = `Sent to ${data.to}`;
+            } catch (e) {
+                this.emailStatus  = 'error';
+                this.emailMessage = e.message;
+            } finally {
+                this.emailSending = false;
+            }
+        },
+
+        /** Finish the registration flow — redirect to checkout with the card pre-loaded. */
+        finishPatronRegistration() {
+            if (!this.patronRegistered) return;
+            window.location.href = `/?card=${encodeURIComponent(this.patronRegistered.card_number)}`;
         },
 
         // ── Book: numeric sanitiser + ISBN auto-fill ─────────────

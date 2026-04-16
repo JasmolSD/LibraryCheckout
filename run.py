@@ -4,13 +4,20 @@ import os
 import sys
 import threading
 import time
+from pathlib import Path
 
 import webview
 from dotenv import load_dotenv
 
 from server.app import create_app
 
-load_dotenv()
+# Load .env from next to the .exe when frozen, or from the repo root
+# when running from source. Matches server.app.config._project_root().
+if getattr(sys, "frozen", False):
+    _env_path = Path(sys.executable).resolve().parent / ".env"
+else:
+    _env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(_env_path)
 
 HOST = "127.0.0.1"
 PORT = 5000

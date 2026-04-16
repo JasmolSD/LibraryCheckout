@@ -14,7 +14,7 @@
         <button @click="tab = 'book'"
                 :class="tab === 'book' ? 'bg-white text-indigo-700' : 'text-indigo-100 hover:bg-white/10'"
                 class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all">
-            Book
+            Item
         </button>
     </div>
 
@@ -42,8 +42,60 @@
              x-text="patronError">
         </div>
 
+        <!-- Success panel: shown after a successful registration so the
+             librarian can print the patron card before continuing. -->
+        <div x-show="patronRegistered" x-transition class="mb-4 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 mt-0.5 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                </svg>
+                <div class="flex-1">
+                    <p class="font-semibold text-emerald-800 text-sm">Registration successful!</p>
+                    <p class="text-xs text-emerald-700 mt-0.5">
+                        <span x-text="patronRegistered && patronRegistered.name"></span>
+                        — card
+                        <span class="font-mono" x-text="patronRegistered && patronRegistered.card_number"></span>
+                    </p>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-2 mt-4">
+                <button type="button"
+                        @click="printPatronCard()"
+                        class="flex-1 min-w-[140px] bg-slate-800 text-white py-2 rounded-lg text-sm font-medium
+                               hover:bg-slate-900 transition-colors flex items-center justify-center gap-1.5">
+                    Print Patron Card
+                </button>
+                <button type="button"
+                        @click="emailPatronCard()"
+                        :disabled="emailSending || !(patronRegistered && patronRegistered.email)"
+                        :title="(patronRegistered && patronRegistered.email)
+                            ? 'Email the card to ' + patronRegistered.email
+                            : 'No email on file for this patron'"
+                        class="flex-1 min-w-[140px] bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium
+                               hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed
+                               transition-colors flex items-center justify-center gap-1.5">
+                    <span x-show="emailSending" class="spinner"></span>
+                    <span x-text="emailSending ? 'Sending…' : 'Email to Patron'"></span>
+                </button>
+                <button type="button"
+                        @click="finishPatronRegistration()"
+                        class="flex-1 min-w-[140px] bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium
+                               hover:bg-indigo-700 transition-colors">
+                    Continue to Checkout →
+                </button>
+            </div>
+
+            <!-- Email status line -->
+            <p x-show="emailStatus === 'sent'"
+               class="mt-3 text-xs text-emerald-700"
+               x-text="'✓ ' + emailMessage"></p>
+            <p x-show="emailStatus === 'error'"
+               class="mt-3 text-xs text-rose-700"
+               x-text="'✕ ' + emailMessage"></p>
+        </div>
+
         <!-- Form -->
-        <form @submit.prevent="submitPatron()" class="space-y-4">
+        <form x-show="!patronRegistered" @submit.prevent="submitPatron()" class="space-y-4">
 
             <!-- Library card number (auto-generated) -->
             <div>
@@ -170,8 +222,8 @@
                 </svg>
             </div>
             <div>
-                <h2 class="font-bold text-lg text-slate-900">Add Book to Catalog</h2>
-                <p class="text-sm text-slate-400">Scan or enter the ISBN to auto-fill details.</p>
+                <h2 class="font-bold text-lg text-slate-900">Add Item to Catalog</h2>
+                <p class="text-sm text-slate-400">Books, DVDs, audiobooks, magazines, eBooks and more.</p>
             </div>
         </div>
 

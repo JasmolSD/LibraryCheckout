@@ -20,12 +20,10 @@
 function checkoutApp() {
     return {
         // ── Core state ──────────────────────────────────────────
-        /** Current value of the library-card input field. */
+        /** Current value of the library-card / patron-search field. */
         cardInput: '',
-        /** Current value of the barcode input field. */
+        /** Current value of the item barcode / title search field. */
         itemInput: '',
-        /** Selected item category for checkout actions. */
-        category: 'book',
         /** Active action tab: 'checkout' | 'return' | 'renew'. */
         action: 'checkout',
         /** Patron summary object returned by GET /api/patrons/:card, or null. */
@@ -33,19 +31,19 @@ function checkoutApp() {
         /** Card number that was looked up but not found (triggers register link). */
         notFoundCard: '',
 
-        /** True briefly when a non-digit is typed into the card field. */
-        cardInputInvalid: false,
-        /** True briefly when a non-digit is typed into the barcode field. */
-        itemInputInvalid: false,
-        _cardInvalidTimer: null,
-        _itemInvalidTimer: null,
-
-        /** Autofill dropdown state for the item-barcode field. */
+        /** Autofill dropdown state for the item barcode / title field. */
         itemResults:      [],
         itemSearching:    false,
         itemShowDropdown: false,
         itemHighlighted:  -1,
         _itemSearchTimer: null,
+
+        /** Autofill dropdown state for the library-card / patron-name field. */
+        cardResults:      [],
+        cardSearching:    false,
+        cardShowDropdown: false,
+        cardHighlighted:  -1,
+        _cardSearchTimer: null,
 
         // ── Loan period state ────────────────────────────────────
         /** Preset selection: '1' | '2' | '3' | 'custom'. */
@@ -60,6 +58,8 @@ function checkoutApp() {
         cardLoading: false,
         /** True while a checkout / return / renew request is in flight. */
         actionLoading: false,
+        /** True while the email-receipt request is in flight. */
+        receiptEmailSending: false,
 
         // ── Toast notifications ──────────────────────────────────
         /**
@@ -92,30 +92,82 @@ function checkoutApp() {
             }
         },
 
-        // ── Numeric input sanitiser ───────────────────────────────
+        // ── Input handlers ────────────────────────────────────────
 
         /**
-         * Strip non-digit characters from a numeric input (card / barcode).
-         * If any non-digits were stripped, flashes the invalid flag for 2.5s.
-         *
-         * @param {InputEvent} event - The input event.
-         * @param {'cardInput'|'itemInput'} key - The field to update.
-         * @param {number} max - Maximum allowed length.
+         * Fires on every keystroke in the card / patron-search field.
+         * Schedules a debounced search that matches patron names and
+         * card-number prefixes.
          */
-        sanitizeNumeric(event, key, max) {
-            const raw = event.target.value;
-            const clean = raw.replace(/\D/g, '').slice(0, max);
-            this[key] = clean;
-            if (event.target.value !== clean) event.target.value = clean;
-            const flagKey = key === 'cardInput' ? 'cardInputInvalid' : 'itemInputInvalid';
-            const timerKey = key === 'cardInput' ? '_cardInvalidTimer' : '_itemInvalidTimer';
-            if (raw !== clean) {
-                this[flagKey] = true;
-                clearTimeout(this[timerKey]);
-                this[timerKey] = setTimeout(() => { this[flagKey] = false; }, 2500);
+        onCardInput() {
+            clearTimeout(this._cardSearchTimer);
+            const q = this.cardInput.trim();
+            if (!q) {
+                this.cardResults      = [];
+                this.cardShowDropdown = false;
+                return;
             }
-            // Trigger autofill search for the item barcode field
-            if (key === 'itemInput') this._scheduleItemSearch();
+            this._cardSearchTimer = setTimeout(() => this._runCardSearch(), 180);
+        },
+
+        async _runCardSearch() {
+            const q = this.cardInput.trim();
+            if (!q) return;
+            this.cardSearching = true;
+            try {
+                const r = await fetch(`/api/patrons/search?q=${encodeURIComponent(q)}`);
+                const data = await r.json();
+                if (r.ok && Array.isArray(data)) {
+                    this.cardResults      = data;
+                    this.cardShowDropdown = true;
+                    this.cardHighlighted  = data.length > 0 ? 0 : -1;
+                }
+            } catch {
+                this.cardResults = [];
+            } finally {
+                this.cardSearching = false;
+            }
+        },
+
+        cardHighlightNext() {
+            if (!this.cardShowDropdown || this.cardResults.length === 0) return;
+            this.cardHighlighted = (this.cardHighlighted + 1) % this.cardResults.length;
+        },
+
+        cardHighlightPrev() {
+            if (!this.cardShowDropdown || this.cardResults.length === 0) return;
+            this.cardHighlighted =
+                (this.cardHighlighted - 1 + this.cardResults.length) % this.cardResults.length;
+        },
+
+        selectCardResult(patron) {
+            this.cardInput        = patron.card_number;
+            this.cardResults      = [];
+            this.cardShowDropdown = false;
+            this.cardHighlighted  = -1;
+            this.lookupPatron();
+        },
+
+        /**
+         * Called on Enter in the card / patron-search field. If a dropdown
+         * item is highlighted, selects it; otherwise runs a patron lookup
+         * by the current value.
+         */
+        cardEnterKey() {
+            if (this.cardShowDropdown && this.cardHighlighted >= 0 && this.cardResults[this.cardHighlighted]) {
+                this.selectCardResult(this.cardResults[this.cardHighlighted]);
+                return;
+            }
+            this.cardShowDropdown = false;
+            this.lookupPatron();
+        },
+
+        /**
+         * Fires on every keystroke in the item barcode / title field.
+         * Schedules a debounced book search.
+         */
+        onItemInput() {
+            this._scheduleItemSearch();
         },
 
         // ── Item autofill ─────────────────────────────────────────
@@ -254,7 +306,6 @@ function checkoutApp() {
             const body = {
                 card_number: this.patron.patron.card_number,
                 barcode,
-                category: this.category,
             };
             if (this.action === 'checkout' || this.action === 'renew') {
                 body.loan_days = this._computeLoanDays();
@@ -300,6 +351,35 @@ function checkoutApp() {
          */
         printReceipt() {
             window.open(`/api/receipts/${this.patron.patron.card_number}`, '_blank');
+        },
+
+        /**
+         * POST to /api/receipts/<card>/email which builds the receipt PDF
+         * and sends it as an attachment to the patron's email on file.
+         */
+        async emailReceipt() {
+            if (!this.patron) return;
+            const card = this.patron.patron.card_number;
+            if (!this.patron.patron.email) {
+                this.toast('Patron has no email address on file', 'warning');
+                return;
+            }
+            this.receiptEmailSending = true;
+            try {
+                const r = await fetch(`/api/receipts/${encodeURIComponent(card)}/email`, {
+                    method: 'POST',
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    this.toast(data.error || 'Email failed', 'error');
+                    return;
+                }
+                this.toast(`Receipt emailed to ${data.to}`, 'success');
+            } catch (e) {
+                this.toast(e.message, 'error');
+            } finally {
+                this.receiptEmailSending = false;
+            }
         },
 
         /**
