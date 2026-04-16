@@ -252,29 +252,30 @@ def create_app(config_name: str | None = None) -> Flask:
     # ── Request-time connectivity guard ──────────────────────────────
     # If the Wi-Fi drops while the app is running, catch DB errors on
     # each request and show a friendly message instead of a 500 trace.
-    @app.errorhandler(Exception)
+    # Only catches OperationalError — all other exceptions (404s, etc.)
+    # flow through Flask's normal handling untouched.
+    from sqlalchemy.exc import OperationalError
+
+    @app.errorhandler(OperationalError)
     def _handle_db_error(exc):
-        from sqlalchemy.exc import OperationalError
+        db_url = app.config.get("SQLALCHEMY_DATABASE_URI") or ""
+        if "postgresql" in db_url:
+            app.logger.error("Database connection lost: %s", exc)
+            try:
+                from flask import render_template
 
-        if isinstance(exc, OperationalError):
-            db_url = app.config.get("SQLALCHEMY_DATABASE_URI") or ""
-            if "postgresql" in db_url:
-                app.logger.error("Database connection lost: %s", exc)
-                try:
-                    from flask import render_template
-
-                    return (
-                        render_template("offline.html"),
-                        503,
-                    )
-                except Exception:
-                    return (
-                        "<h1>No Database Connection</h1>"
-                        "<p>This app requires Wi-Fi to reach the library database.</p>"
-                        "<p>Please check your internet connection and refresh this page.</p>",
-                        503,
-                    )
-        # Re-raise anything that isn't a DB connectivity error
+                return (
+                    render_template("offline.html"),
+                    503,
+                )
+            except Exception:
+                return (
+                    "<h1>No Database Connection</h1>"
+                    "<p>This app requires Wi-Fi to reach the library database.</p>"
+                    "<p>Please check your internet connection and refresh this page.</p>",
+                    503,
+                )
+        # Local SQLite — let Flask's default 500 handler deal with it
         raise exc
 
     return app

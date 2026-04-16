@@ -30,8 +30,12 @@ def next_card():
 
     Returns:
         200 with ``{"card_number": "<14-digit string>"}``
+        500 with ``{"error": "..."}`` if the database is unreachable.
     """
-    return jsonify({"card_number": checkout_service.next_card_number()})
+    try:
+        return jsonify({"card_number": checkout_service.next_card_number()})
+    except Exception as e:
+        return jsonify({"error": f"Could not generate card number: {e}"}), 500
 
 
 @bp.get("/search")
