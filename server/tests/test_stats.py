@@ -197,7 +197,7 @@ class TestOverdue:
         assert row["patron_name"] == "DOE, JANE"
         assert row["card_number"] == "1234567890"
         assert row["barcode"] == "9780451524935"
-        assert row["book_title"] == "Nineteen Eighty-Four"
+        assert row["item_title"] == "Nineteen Eighty-Four"
         assert row["days_overdue"] >= 7
 
     def test_overdue_excludes_returned_items(self, client, patron):
@@ -265,7 +265,7 @@ class TestOverdue:
             "patron_name",
             "card_number",
             "card_masked",
-            "book_title",
+            "item_title",
             "barcode",
             "category",
             "checked_out_at",
