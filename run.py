@@ -38,7 +38,7 @@ def main() -> None:
     window_title = os.getenv("APP_TITLE", "Library Checkout")
     webview.create_window(
         title=window_title,
-        url=f"http://{HOST}:{PORT}",
+        url=f"http://127.0.0.1:{PORT}",
         width=1280,
         height=820,
         min_size=(1024, 700),
