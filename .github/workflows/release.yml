@@ -20,7 +20,7 @@ jobs:
           enable-cache: true
 
       - name: Install all dependencies
-        run: uv sync --group desktop --group dev
+        run: uv sync --group desktop --group dev --group postgres
 
       - name: Build standalone executable
         run: >
@@ -30,8 +30,10 @@ jobs:
           --name LibraryCheckout
           --collect-all pywebview
           --collect-all clr_loader
+          --collect-all psycopg
           --hidden-import pythoncom
           --hidden-import pywintypes
+          --hidden-import psycopg
           --add-data "client;client"
           --add-data "server;server"
           run.py
