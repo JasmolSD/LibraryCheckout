@@ -22,6 +22,14 @@ jobs:
       - name: Install all dependencies
         run: uv sync --group desktop --group dev --group postgres
 
+      - name: Stamp VERSION from release tag
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          (Get-Content server/app/__init__.py) `
+            -replace 'VERSION\s*=\s*"[^"]*"', "VERSION = `"$ver`"" |
+            Set-Content server/app/__init__.py
+
       - name: Build standalone executable
         run: >
           uv run pyinstaller

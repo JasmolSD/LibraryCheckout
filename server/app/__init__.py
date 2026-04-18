@@ -15,7 +15,7 @@ from .utils.logger import setup_logging
 #: by :mod:`server.app.services.update_check`.  Bump this whenever you
 #: publish a new release so the "Update available" banner triggers for
 #: older installs.  Tags on GitHub are expected to look like ``v0.1.0``.
-VERSION = "0.1.0"
+VERSION = "0.4"
 
 
 def create_app(config_name: str | None = None) -> Flask:
