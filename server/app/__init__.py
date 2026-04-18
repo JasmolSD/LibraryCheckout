@@ -100,6 +100,7 @@ def create_app(config_name: str | None = None) -> Flask:
                     icon_image = f"images/icon.{ext}"
                     break
         return {
+            "app_version": VERSION,
             "app_title": app.config["APP_TITLE"],
             "library_name": app.config["LIBRARY_NAME"],
             "library_branch": app.config["LIBRARY_BRANCH"],
