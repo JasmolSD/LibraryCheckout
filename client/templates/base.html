@@ -38,7 +38,8 @@
     {% endif %}
 
     <!-- ── Header ───────────────────────────────────────────── -->
-    <header class="relative z-10 bg-gradient-to-r from-indigo-800 to-indigo-600 text-white shadow-lg">
+    <header class="relative z-10 bg-gradient-to-r from-indigo-800 to-indigo-600 text-white shadow-lg"
+            x-data="dbStatusIndicator()" x-init="init()">
         <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
 
             <!-- Logo / title -->
@@ -103,6 +104,21 @@
                     Help
                 </a>
             </nav>
+
+            <!-- Version + DB status -->
+            <div class="flex items-center gap-2 ml-4 text-xs text-indigo-200 flex-shrink-0">
+                <span class="font-mono">v{{ app_version }}</span>
+                <span class="flex items-center gap-1"
+                      :title="connected ? 'Database connected' : 'Database unreachable'">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span x-show="connected"
+                              class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-60"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5"
+                              :class="connected ? 'bg-green-400' : 'bg-red-400'"></span>
+                    </span>
+                    <span x-text="connected ? 'DB' : 'Offline'" class="hidden sm:inline"></span>
+                </span>
+            </div>
         </div>
     </header>
 
@@ -159,6 +175,29 @@
             </span>
         </div>
     </footer>
+
+    <!-- DB status + version indicator Alpine component -->
+    <script>
+        function dbStatusIndicator() {
+            return {
+                connected: true,
+
+                async init() {
+                    await this._check();
+                    setInterval(() => this._check(), 30000);
+                },
+
+                async _check() {
+                    try {
+                        const r = await fetch('/api/health', { cache: 'no-store' });
+                        this.connected = r.ok;
+                    } catch {
+                        this.connected = false;
+                    }
+                },
+            };
+        }
+    </script>
 
     <!-- Update-banner Alpine component (shared across all pages) -->
     <script>
