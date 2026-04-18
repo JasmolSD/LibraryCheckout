@@ -119,8 +119,8 @@ def create_app(config_name: str | None = None) -> Flask:
         app.register_blueprint(checkouts.bp)
         app.register_blueprint(receipts.bp)
         app.register_blueprint(books.bp)
-    except ImportError:
-        app.logger.warning("Route blueprints not yet available; skipping.")
+    except ImportError as _bp_err:
+        app.logger.warning("Route blueprints not yet available; skipping. Error: %s", _bp_err)
 
     # Default landing route — replaced by template in batch 4
     @app.route("/")
