@@ -434,3 +434,110 @@ class TestNextCard:
         r1 = client.get("/api/patrons/next-card")
         r2 = client.get("/api/patrons/next-card")
         assert r1.get_json()["card_number"] == r2.get_json()["card_number"]
+
+
+# ── PATCH /api/books/<barcode> ───────────────────────────────────────────────
+
+
+class TestEditBook:
+    def _add(self, client, barcode="9780451524935", **kwargs):
+        client.post("/api/books/", json={"barcode": barcode, **kwargs})
+
+    def test_edit_title(self, client):
+        self._add(client, title="Old Title")
+        r = client.patch("/api/books/9780451524935", json={"title": "New Title"})
+        assert r.status_code == 200
+        assert r.get_json()["title"] == "New Title"
+
+    def test_edit_author(self, client):
+        self._add(client, author="Old Author")
+        r = client.patch("/api/books/9780451524935", json={"author": "New Author"})
+        assert r.status_code == 200
+        assert r.get_json()["author"] == "New Author"
+
+    def test_edit_category(self, client):
+        self._add(client)
+        r = client.patch("/api/books/9780451524935", json={"category": "dvd"})
+        assert r.status_code == 200
+        assert r.get_json()["category"] == "dvd"
+
+    def test_edit_invalid_category_returns_400(self, client):
+        self._add(client)
+        r = client.patch("/api/books/9780451524935", json={"category": "newspaper"})
+        assert r.status_code == 400
+        assert "Invalid category" in r.get_json()["error"]
+
+    def test_edit_clears_title_with_empty_string(self, client):
+        self._add(client, title="Some Title")
+        r = client.patch("/api/books/9780451524935", json={"title": ""})
+        assert r.status_code == 200
+        assert r.get_json()["title"] is None
+
+    def test_edit_unknown_barcode_returns_400(self, client):
+        r = client.patch("/api/books/9780000000000", json={"title": "Ghost"})
+        assert r.status_code == 400
+        assert "Unknown item" in r.get_json()["error"]
+
+    def test_edit_partial_leaves_other_fields_unchanged(self, client):
+        self._add(client, title="1984", author="Orwell", category="book")
+        r = client.patch("/api/books/9780451524935", json={"title": "Nineteen Eighty-Four"})
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["title"] == "Nineteen Eighty-Four"
+        assert data["author"] == "Orwell"
+        assert data["category"] == "book"
+
+    def test_change_barcode(self, client):
+        self._add(client, title="1984")
+        r = client.patch(
+            "/api/books/9780451524935",
+            json={"new_barcode": "9780451524936"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["barcode"] == "9780451524936"
+        assert data["title"] == "1984"
+
+    def test_change_barcode_old_barcode_no_longer_found(self, client):
+        self._add(client)
+        client.patch("/api/books/9780451524935", json={"new_barcode": "9780451524936"})
+        r = client.get("/api/books/9780451524935")
+        assert r.status_code == 400
+
+    def test_change_barcode_new_barcode_is_accessible(self, client):
+        self._add(client, title="1984")
+        client.patch("/api/books/9780451524935", json={"new_barcode": "9780451524936"})
+        r = client.get("/api/books/9780451524936")
+        assert r.status_code == 200
+        assert r.get_json()["title"] == "1984"
+
+    def test_change_barcode_to_existing_returns_400(self, client):
+        self._add(client, barcode="9780451524935")
+        self._add(client, barcode="9780451524936")
+        r = client.patch(
+            "/api/books/9780451524935",
+            json={"new_barcode": "9780451524936"},
+        )
+        assert r.status_code == 400
+        assert "already in use" in r.get_json()["error"]
+
+    def test_change_barcode_invalid_format_returns_400(self, client):
+        self._add(client)
+        r = client.patch("/api/books/9780451524935", json={"new_barcode": "12345"})
+        assert r.status_code == 400
+
+    def test_change_barcode_preserves_loan_history(self, client, patron):
+        self._add(client, barcode="9780451524935")
+        client.post(
+            "/api/checkouts/",
+            json={"card_number": "1234567890", "barcode": "9780451524935"},
+        )
+        client.post(
+            "/api/checkouts/return", json={"barcode": "9780451524935", "card_number": "1234567890"}
+        )
+        client.patch("/api/books/9780451524935", json={"new_barcode": "9780451524936"})
+        # Loan history is stored by internal id; patron history should still exist
+        r = client.get("/api/patrons/1234567890")
+        assert r.status_code == 200
+        history = r.get_json().get("history", [])
+        assert len(history) >= 2  # checkout + return

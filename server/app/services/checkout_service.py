@@ -8,7 +8,7 @@ from flask import current_app
 from sqlalchemy import func
 
 from ..database import db
-from ..models import CatalogItem, Loan, Patron, Transaction
+from ..models import CatalogItem, CategoryType, Loan, Patron, Transaction
 from .email_service import send_notification_email, send_patron_action_email
 from .receipt_service import (
     ActionKind,
@@ -278,7 +278,7 @@ def add_book_to_catalog(
     barcode: str,
     title: str | None = None,
     author: str | None = None,
-    category: str = "book",
+    category: str = CategoryType.BOOK,
     quantity: int = 1,
 ) -> CatalogItem:
     """Add a new item to the catalog without checking it out.
@@ -291,11 +291,15 @@ def add_book_to_catalog(
         raise ValidationError("Quantity must be at least 1")
     if CatalogItem.query.filter_by(barcode=barcode).first():
         raise ValidationError(f"Item {barcode} is already in the catalog")
+    try:
+        resolved_category = CategoryType(category)
+    except ValueError:
+        resolved_category = CategoryType.BOOK
     book = CatalogItem(
         barcode=barcode,
         title=title.strip() if title and title.strip() else None,
         author=author.strip() if author and author.strip() else None,
-        category=category or "book",
+        category=resolved_category,
         total_copies=quantity,
     )
     db.session.add(book)
@@ -325,6 +329,38 @@ def update_book_quantity(barcode: str, total_copies: int) -> CatalogItem:
     book.total_copies = total_copies
     db.session.commit()
     current_app.logger.info("Updated quantity for %s to %d", barcode, total_copies)
+    return book
+
+
+def edit_book(
+    barcode: str,
+    title: str | None = None,
+    author: str | None = None,
+    category: str | None = None,
+    new_barcode: str | None = None,
+) -> CatalogItem:
+    """Update editable metadata fields on an existing catalog item."""
+    barcode = validate_barcode(barcode)
+    book = CatalogItem.query.filter_by(barcode=barcode).first()
+    if not book:
+        raise ValidationError(f"Unknown item {barcode}")
+    if new_barcode is not None:
+        new_barcode = validate_barcode(new_barcode)
+        if new_barcode != book.barcode:
+            if CatalogItem.query.filter_by(barcode=new_barcode).first():
+                raise ValidationError(f"Barcode {new_barcode} is already in use")
+            book.barcode = new_barcode
+    if title is not None:
+        book.title = title.strip() or None
+    if author is not None:
+        book.author = author.strip() or None
+    if category is not None:
+        try:
+            book.category = CategoryType(category)
+        except ValueError:
+            raise ValidationError(f"Invalid category '{category}'") from None
+    db.session.commit()
+    current_app.logger.info("Edited catalog item %s", book.barcode)
     return book
 
 
@@ -460,7 +496,7 @@ def book_details(barcode: str) -> dict:
 
 
 def get_or_create_book(
-    barcode: str, title: str | None = None, category: str = "book"
+    barcode: str, title: str | None = None, category: str = CategoryType.BOOK
 ) -> CatalogItem:
     """Look up an item by barcode, creating a new record if not found."""
     book = CatalogItem.query.filter_by(barcode=barcode).first()
@@ -468,7 +504,11 @@ def get_or_create_book(
         if title and not book.title:
             book.title = title
         return book
-    book = CatalogItem(barcode=barcode, title=title, category=category, total_copies=1)
+    try:
+        resolved_category = CategoryType(category)
+    except ValueError:
+        resolved_category = CategoryType.BOOK
+    book = CatalogItem(barcode=barcode, title=title, category=resolved_category, total_copies=1)
     db.session.add(book)
     db.session.flush()
     return book
@@ -478,7 +518,7 @@ def checkout_item(
     card: str,
     barcode: str,
     loan_days: int = 14,
-    category: str = "book",
+    category: str = CategoryType.BOOK,
     title: str | None = None,
 ) -> Loan:
     """Check out a single item to a patron.

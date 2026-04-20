@@ -3,12 +3,23 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base, db
+
+
+class CategoryType(StrEnum):
+    BOOK = "book"
+    DVD = "dvd"
+    AUDIOBOOK = "audiobook"
+    MAGAZINE = "magazine"
+    EBOOK = "ebook"
+    OTHER = "other"
+
 
 # At type-check time extend the typed DeclarativeBase so pyright can infer
 # constructor signatures from Mapped[T] fields.  At runtime extend db.Model
@@ -73,8 +84,7 @@ class CatalogItem(_Base):
     barcode: Mapped[str] = mapped_column(String(14), unique=True, index=True)
     title: Mapped[str | None] = mapped_column(String(200))
     author: Mapped[str | None] = mapped_column(String(120))
-    # categories: book, dvd, audiobook, magazine, ebook, other
-    category: Mapped[str] = mapped_column(String(40), default="book")
+    category: Mapped[str] = mapped_column(String(40), default=CategoryType.BOOK)
     total_copies: Mapped[int] = mapped_column(default=1)
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
     is_active: Mapped[bool] = mapped_column(default=True)

@@ -10,6 +10,7 @@ Ported from a legacy Excel/VBA workflow to a modern Flask + pywebview stack.
 - **Email receipts** — the checkout screen's receipt panel has an "Email Receipt" button alongside Print; the email contains the PDF as an attachment and a text list of the items
 - **Automatic archival to your own inbox** — when SMTP is configured, every checkout and patron edit also mails the library account a plain-text summary; with IMAP set, the notifications are automatically filed under dedicated **Library Receipts** and **Library Patrons** Gmail labels. Toggle with `ARCHIVE_NOTIFICATIONS=true/false` in `.env`
 - **Editable patron profiles** — the History page has an Edit button that lets librarians update name, DOB, email, and phone in place
+- **Editable catalog items** — the Catalog page lets librarians update a book's barcode, title, author, and category directly from the expanded row; loan history is preserved on barcode correction; changes are saved to the database immediately
 - **Auto-generated card numbers** — registration page assigns the next sequential 14-digit library card automatically; no manual entry required
 - **Catalog management** — Catalog page with ISBN auto-fill via Google Books for adding new items and an autofill search box (matches barcode prefix, title, or author) for managing existing ones; supports `barcode*` wildcard for prefix-only lookups
 - **Autofill book selection** — the checkout screen's item field shows a live dropdown of matching catalog entries (barcode · title · author) as you type

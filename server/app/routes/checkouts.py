@@ -5,6 +5,7 @@ Blueprinted under ``/api/checkouts``.  All requests and responses are JSON.
 
 from flask import Blueprint, jsonify, request
 
+from ..models import CategoryType
 from ..services import checkout_service
 from ..services.validators import ValidationError
 
@@ -48,7 +49,7 @@ def checkout():
             card=data.get("card_number", ""),
             barcode=data.get("barcode", ""),
             loan_days=loan_days,
-            category=data.get("category", "book"),
+            category=data.get("category", CategoryType.BOOK),
             title=data.get("title"),
         )
         return jsonify(loan.to_dict()), 201
