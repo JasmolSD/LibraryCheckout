@@ -168,6 +168,82 @@
                                                                   class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
                                                                 Checked out
                                                             </span>
+                                                            <button @click.stop="openEdit(r.barcode)"
+                                                                    x-show="!expanded[r.barcode].editing"
+                                                                    class="bg-slate-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg
+                                                                           hover:bg-slate-800 transition-colors flex items-center gap-1">
+                                                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                                          d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5
+                                                                             4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/>
+                                                                </svg>
+                                                                Edit
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Edit item panel -->
+                                                    <div x-show="expanded[r.barcode].editing"
+                                                         x-transition
+                                                         class="mb-4 pt-3 border-t border-slate-200">
+                                                        <h4 class="text-sm font-semibold text-slate-800 mb-3">Edit Item Information</h4>
+                                                        <div x-show="expanded[r.barcode].editError"
+                                                             class="mb-3 p-2 bg-rose-50 border border-rose-200 rounded text-xs text-rose-700"
+                                                             x-text="expanded[r.barcode].editError">
+                                                        </div>
+                                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm" @click.stop>
+                                                            <div class="sm:col-span-2">
+                                                                <label class="block text-xs text-slate-600 mb-1">
+                                                                    Barcode
+                                                                    <span class="ml-1 text-slate-400">(ISBN-10/13 or 14-digit)</span>
+                                                                </label>
+                                                                <input x-model="expanded[r.barcode].editForm.barcode"
+                                                                       type="text"
+                                                                       inputmode="numeric"
+                                                                       class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-mono
+                                                                              focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                                            </div>
+                                                            <div class="sm:col-span-2">
+                                                                <label class="block text-xs text-slate-600 mb-1">Title</label>
+                                                                <input x-model="expanded[r.barcode].editForm.title"
+                                                                       type="text"
+                                                                       class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm
+                                                                              focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                                            </div>
+                                                            <div>
+                                                                <label class="block text-xs text-slate-600 mb-1">Author</label>
+                                                                <input x-model="expanded[r.barcode].editForm.author"
+                                                                       type="text"
+                                                                       class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm
+                                                                              focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                                            </div>
+                                                            <div>
+                                                                <label class="block text-xs text-slate-600 mb-1">Category</label>
+                                                                <select x-model="expanded[r.barcode].editForm.category"
+                                                                        class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm
+                                                                               focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                                                    <option value="book">Book</option>
+                                                                    <option value="dvd">DVD</option>
+                                                                    <option value="audiobook">Audiobook</option>
+                                                                    <option value="magazine">Magazine</option>
+                                                                    <option value="ebook">eBook</option>
+                                                                    <option value="other">Other</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex items-center gap-2 mt-4" @click.stop>
+                                                            <button @click.stop="cancelEdit(r.barcode)"
+                                                                    class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs
+                                                                           font-medium hover:bg-slate-50 transition-colors">
+                                                                Cancel
+                                                            </button>
+                                                            <button @click.stop="saveEdit(r.barcode)"
+                                                                    :disabled="expanded[r.barcode].editSaving"
+                                                                    class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-medium
+                                                                           hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-1.5">
+                                                                <span x-show="expanded[r.barcode].editSaving" class="spinner"></span>
+                                                                <span x-text="expanded[r.barcode].editSaving ? 'Saving…' : 'Save Changes'"></span>
+                                                            </button>
                                                         </div>
                                                     </div>
 
@@ -382,12 +458,16 @@ function catalogApp() {
             }
             // Seed the entry so the expand row renders with a loading state
             this.expanded[barcode] = {
-                book:     null,
-                loading:  true,
-                acting:   false,
-                error:    '',
-                newTotal: 0,
-                addQty:   1,
+                book:       null,
+                loading:    true,
+                acting:     false,
+                error:      '',
+                newTotal:   0,
+                addQty:     1,
+                editing:    false,
+                editSaving: false,
+                editError:  '',
+                editForm:   { barcode: '', title: '', author: '', category: 'book' },
             };
             await this._fetchRowDetails(barcode);
         },
@@ -546,6 +626,76 @@ function catalogApp() {
                 row.error = e.message;
             } finally {
                 row.acting = false;
+            }
+        },
+
+        // ── Edit item ──────────────────────────────────────────
+
+        openEdit(barcode) {
+            const row = this.expanded[barcode];
+            if (!row || !row.book) return;
+            row.editForm  = {
+                barcode:  row.book.barcode,
+                title:    row.book.title    || '',
+                author:   row.book.author   || '',
+                category: row.book.category || 'book',
+            };
+            row.editError = '';
+            row.editing   = true;
+        },
+
+        cancelEdit(barcode) {
+            const row = this.expanded[barcode];
+            if (!row) return;
+            row.editing   = false;
+            row.editError = '';
+        },
+
+        async saveEdit(barcode) {
+            const row = this.expanded[barcode];
+            if (!row || !row.book) return;
+            row.editSaving     = true;
+            row.editError      = '';
+            this.globalError   = '';
+            this.globalSuccess = '';
+            try {
+                const payload = {
+                    title:    row.editForm.title,
+                    author:   row.editForm.author,
+                    category: row.editForm.category,
+                };
+                const newBarcode = row.editForm.barcode.trim();
+                if (newBarcode && newBarcode !== barcode) {
+                    payload.new_barcode = newBarcode;
+                }
+                const r = await fetch(`/api/books/${encodeURIComponent(barcode)}`, {
+                    method:  'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify(payload),
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    row.editError = data.error || 'Save failed';
+                    return;
+                }
+                row.editing = false;
+                const savedBarcode = data.barcode;
+                this.globalSuccess = `Updated: ${data.title || savedBarcode}`;
+                if (savedBarcode !== barcode) {
+                    // Re-key the expanded entry under the new barcode
+                    this.expanded[savedBarcode] = this.expanded[barcode];
+                    delete this.expanded[barcode];
+                    // Update the matching search-results row
+                    const idx = this.results.findIndex(b => b.barcode === barcode);
+                    if (idx !== -1) this.results[idx] = { ...this.results[idx], ...data };
+                    await this._fetchRowDetails(savedBarcode);
+                } else {
+                    await this._fetchRowDetails(barcode);
+                }
+            } catch (e) {
+                row.editError = e.message;
+            } finally {
+                row.editSaving = false;
             }
         },
     };

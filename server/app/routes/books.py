@@ -11,16 +11,17 @@ import urllib.request
 
 from flask import Blueprint, jsonify, request
 
+from ..models import CategoryType
 from ..services import checkout_service
 from ..services.validators import ValidationError
 
 bp = Blueprint("books", __name__, url_prefix="/api/books")
 
-_CATEGORY_KEYWORDS: dict[str, list[str]] = {
-    "dvd": ["dvd", "video", "film", "movie", "motion picture"],
-    "audiobook": ["audio", "spoken word", "sound recording"],
-    "magazine": ["magazine", "periodical", "journal", "serial"],
-    "ebook": ["electronic", "ebook", "e-book", "digital"],
+_CATEGORY_KEYWORDS: dict[CategoryType, list[str]] = {
+    CategoryType.DVD:       ["dvd", "video", "film", "movie", "motion picture"],
+    CategoryType.AUDIOBOOK: ["audio", "spoken word", "sound recording"],
+    CategoryType.MAGAZINE:  ["magazine", "periodical", "journal", "serial"],
+    CategoryType.EBOOK:     ["electronic", "ebook", "e-book", "digital"],
 }
 
 
@@ -30,7 +31,7 @@ def _map_category(raw_categories: list[str]) -> str:
     for category, keywords in _CATEGORY_KEYWORDS.items():
         if any(kw in combined for kw in keywords):
             return category
-    return "book"
+    return CategoryType.BOOK
 
 
 @bp.get("/lookup")
@@ -145,10 +146,38 @@ def add_book():
             barcode=data.get("barcode", ""),
             title=data.get("title"),
             author=data.get("author"),
-            category=data.get("category", "book"),
+            category=data.get("category", CategoryType.BOOK),
             quantity=quantity,
         )
         return jsonify(book.to_dict()), 201
+    except ValidationError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@bp.patch("/<barcode>")
+def edit_book(barcode):
+    """Update editable metadata (barcode, title, author, category) for a catalog item.
+
+    Request body (JSON):
+        new_barcode (str, optional): Replacement barcode — must be unique and valid.
+        title (str, optional): New title.
+        author (str, optional): New author.
+        category (str, optional): One of book / dvd / audiobook / magazine / ebook / other.
+
+    Returns:
+        200 with updated book JSON on success.
+        400 ``{"error": "..."}`` on validation failure.
+    """
+    data = request.get_json() or {}
+    try:
+        book = checkout_service.edit_book(
+            barcode=barcode,
+            new_barcode=data.get("new_barcode"),
+            title=data.get("title"),
+            author=data.get("author"),
+            category=data.get("category"),
+        )
+        return jsonify(book.to_dict())
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400
 
