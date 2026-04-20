@@ -532,7 +532,9 @@ class TestEditBook:
             "/api/checkouts/",
             json={"card_number": "1234567890", "barcode": "9780451524935"},
         )
-        client.post("/api/checkouts/return", json={"barcode": "9780451524935", "card_number": "1234567890"})
+        client.post(
+            "/api/checkouts/return", json={"barcode": "9780451524935", "card_number": "1234567890"}
+        )
         client.patch("/api/books/9780451524935", json={"new_barcode": "9780451524936"})
         # Loan history is stored by internal id; patron history should still exist
         r = client.get("/api/patrons/1234567890")

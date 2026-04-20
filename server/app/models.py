@@ -13,12 +13,13 @@ from .database import Base, db
 
 
 class CategoryType(StrEnum):
-    BOOK      = "book"
-    DVD       = "dvd"
+    BOOK = "book"
+    DVD = "dvd"
     AUDIOBOOK = "audiobook"
-    MAGAZINE  = "magazine"
-    EBOOK     = "ebook"
-    OTHER     = "other"
+    MAGAZINE = "magazine"
+    EBOOK = "ebook"
+    OTHER = "other"
+
 
 # At type-check time extend the typed DeclarativeBase so pyright can infer
 # constructor signatures from Mapped[T] fields.  At runtime extend db.Model

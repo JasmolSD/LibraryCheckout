@@ -358,7 +358,7 @@ def edit_book(
         try:
             book.category = CategoryType(category)
         except ValueError:
-            raise ValidationError(f"Invalid category '{category}'")
+            raise ValidationError(f"Invalid category '{category}'") from None
     db.session.commit()
     current_app.logger.info("Edited catalog item %s", book.barcode)
     return book
